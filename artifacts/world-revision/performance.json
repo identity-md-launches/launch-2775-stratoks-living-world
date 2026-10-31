@@ -1,0 +1,281 @@
+{
+  "note": "Headless Chromium, one page at a time, DPR 1. Render loop caps at 30 Hz. Main-thread JS heap excludes worker/native/GPU memory. No hardware FPS guarantee.",
+  "scenes": [
+    {
+      "export": "before",
+      "width": 1440,
+      "scene": "settlement",
+      "camera": {
+        "span": 22,
+        "x": 24,
+        "y": 24
+      },
+      "size": {
+        "w": 1440,
+        "h": 764
+      },
+      "drawSamples": 120,
+      "drawMedianMs": 7.200000047683716,
+      "drawP95Ms": 11.300000190734863,
+      "drawMaxMs": 26.59999990463257,
+      "rafSamples": 298,
+      "rafMedianMs": 16.699999999999818,
+      "rafP95Ms": 33.30000000000018,
+      "mainHeapBytes": 15200000,
+      "receivedResourceGroups": 0
+    },
+    {
+      "export": "before",
+      "width": 1440,
+      "scene": "overview",
+      "camera": {
+        "span": 41.725067385444746,
+        "x": 24,
+        "y": 24
+      },
+      "size": {
+        "w": 1440,
+        "h": 764
+      },
+      "drawSamples": 120,
+      "drawMedianMs": 21.299999952316284,
+      "drawP95Ms": 57.39999985694885,
+      "drawMaxMs": 653.9000000953674,
+      "rafSamples": 100,
+      "rafMedianMs": 50,
+      "rafP95Ms": 83.29999999999927,
+      "mainHeapBytes": 15200000,
+      "receivedResourceGroups": 0
+    },
+    {
+      "export": "before",
+      "width": 1440,
+      "scene": "cold",
+      "camera": {
+        "span": 22,
+        "x": 25.522123893805315,
+        "y": -50.05309734513274
+      },
+      "size": {
+        "w": 1440,
+        "h": 764
+      },
+      "drawSamples": 120,
+      "drawMedianMs": 11,
+      "drawP95Ms": 24.600000143051147,
+      "drawMaxMs": 603.7999999523163,
+      "rafSamples": 103,
+      "rafMedianMs": 50,
+      "rafP95Ms": 66.70000000000073,
+      "mainHeapBytes": 15200000,
+      "receivedResourceGroups": 0
+    },
+    {
+      "export": "before",
+      "width": 390,
+      "scene": "settlement",
+      "camera": {
+        "span": 9.5,
+        "x": 24,
+        "y": 24
+      },
+      "size": {
+        "w": 390,
+        "h": 722
+      },
+      "drawSamples": 120,
+      "drawMedianMs": 2.1999998092651367,
+      "drawP95Ms": 5.099999904632568,
+      "drawMaxMs": 9,
+      "rafSamples": 331,
+      "rafMedianMs": 16.699999999999818,
+      "rafP95Ms": 16.700000000000728,
+      "mainHeapBytes": 17100000,
+      "receivedResourceGroups": 0
+    },
+    {
+      "export": "before",
+      "width": 390,
+      "scene": "overview",
+      "camera": {
+        "span": 18.287895310796074,
+        "x": 24,
+        "y": 24
+      },
+      "size": {
+        "w": 390,
+        "h": 722
+      },
+      "drawSamples": 120,
+      "drawMedianMs": 5.699999809265137,
+      "drawP95Ms": 12.5,
+      "drawMaxMs": 27.199999809265137,
+      "rafSamples": 324,
+      "rafMedianMs": 16.69999999999891,
+      "rafP95Ms": 16.799999999999272,
+      "mainHeapBytes": 17100000,
+      "receivedResourceGroups": 0
+    },
+    {
+      "export": "before",
+      "width": 390,
+      "scene": "cold",
+      "camera": {
+        "span": 9.5,
+        "x": 25.05263157894737,
+        "y": -50.10526315789474
+      },
+      "size": {
+        "w": 390,
+        "h": 722
+      },
+      "drawSamples": 120,
+      "drawMedianMs": 5.400000095367432,
+      "drawP95Ms": 7.3999998569488525,
+      "drawMaxMs": 10.5,
+      "rafSamples": 318,
+      "rafMedianMs": 16.700000000000728,
+      "rafP95Ms": 16.700000000000728,
+      "mainHeapBytes": 17100000,
+      "receivedResourceGroups": 0
+    },
+    {
+      "export": "preview",
+      "width": 1440,
+      "scene": "settlement",
+      "camera": {
+        "span": 22,
+        "x": 24,
+        "y": 24
+      },
+      "size": {
+        "w": 1440,
+        "h": 764
+      },
+      "drawSamples": 120,
+      "drawMedianMs": 6.400000095367432,
+      "drawP95Ms": 11.5,
+      "drawMaxMs": 34.200000047683716,
+      "rafSamples": 316,
+      "rafMedianMs": 16.699999999999818,
+      "rafP95Ms": 16.800000000000182,
+      "mainHeapBytes": 27600000,
+      "receivedResourceGroups": 189
+    },
+    {
+      "export": "preview",
+      "width": 1440,
+      "scene": "overview",
+      "camera": {
+        "span": 41.725067385444746,
+        "x": 24,
+        "y": 24
+      },
+      "size": {
+        "w": 1440,
+        "h": 764
+      },
+      "drawSamples": 120,
+      "drawMedianMs": 13.900000095367432,
+      "drawP95Ms": 33.60000014305115,
+      "drawMaxMs": 52.90000009536743,
+      "rafSamples": 169,
+      "rafMedianMs": 33.29999999999927,
+      "rafP95Ms": 50,
+      "mainHeapBytes": 27600000,
+      "receivedResourceGroups": 290
+    },
+    {
+      "export": "preview",
+      "width": 1440,
+      "scene": "cold",
+      "camera": {
+        "span": 22,
+        "x": 25.522123893805315,
+        "y": -50.05309734513274
+      },
+      "size": {
+        "w": 1440,
+        "h": 764
+      },
+      "drawSamples": 120,
+      "drawMedianMs": 23.200000047683716,
+      "drawP95Ms": 28.5,
+      "drawMaxMs": 41,
+      "rafSamples": 147,
+      "rafMedianMs": 33.30000000000291,
+      "rafP95Ms": 50.099999999998545,
+      "mainHeapBytes": 27600000,
+      "receivedResourceGroups": 8
+    },
+    {
+      "export": "preview",
+      "width": 390,
+      "scene": "settlement",
+      "camera": {
+        "span": 9.5,
+        "x": 24,
+        "y": 24
+      },
+      "size": {
+        "w": 390,
+        "h": 722
+      },
+      "drawSamples": 120,
+      "drawMedianMs": 1.6000001430511475,
+      "drawP95Ms": 3.6999998092651367,
+      "drawMaxMs": 5,
+      "rafSamples": 324,
+      "rafMedianMs": 16.699999999999818,
+      "rafP95Ms": 16.799999999999272,
+      "mainHeapBytes": 29400000,
+      "receivedResourceGroups": 111
+    },
+    {
+      "export": "preview",
+      "width": 390,
+      "scene": "overview",
+      "camera": {
+        "span": 18.287895310796074,
+        "x": 24,
+        "y": 24
+      },
+      "size": {
+        "w": 390,
+        "h": 722
+      },
+      "drawSamples": 120,
+      "drawMedianMs": 3.8000001907348633,
+      "drawP95Ms": 7,
+      "drawMaxMs": 8.299999952316284,
+      "rafSamples": 310,
+      "rafMedianMs": 16.69999999999891,
+      "rafP95Ms": 16.799999999999272,
+      "mainHeapBytes": 29400000,
+      "receivedResourceGroups": 171
+    },
+    {
+      "export": "preview",
+      "width": 390,
+      "scene": "cold",
+      "camera": {
+        "span": 9.5,
+        "x": 25.05263157894737,
+        "y": -50.10526315789474
+      },
+      "size": {
+        "w": 390,
+        "h": 722
+      },
+      "drawSamples": 120,
+      "drawMedianMs": 1.2000000476837158,
+      "drawP95Ms": 2.200000047683716,
+      "drawMaxMs": 7,
+      "rafSamples": 323,
+      "rafMedianMs": 16.700000000000728,
+      "rafP95Ms": 16.799999999999272,
+      "mainHeapBytes": 29400000,
+      "receivedResourceGroups": 7
+    }
+  ]
+}

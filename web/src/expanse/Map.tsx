@@ -15,6 +15,9 @@ import {
   zoomAt,
   type Size,
 } from "./projection";
+import { ResourceEvidence } from './ResourceEvidence';
+import { resourceGroups } from './resources';
+import { projectSurface } from './surface';
 import { pickSurface, heightAt } from "./surface";
 import type { Camera, WorldFrame } from "./types";
 export { clampCamera, DEFAULT_BOUNDS } from "./projection";
@@ -59,6 +62,7 @@ export function WorldMap({
     [assetError, setAssetError] = useState(false);
   const [size, setSize] = useState<Size>({ w: 800, h: 600 });
   const [hover, setHover] = useState("");
+  const [resourceSelection,setResourceSelection]=useState<{key:string|null}|null>(null);
   const [pickedTile,setPickedTile]=useState<{x:number;y:number}|null>(null);
   const current = useRef({
     frame,
@@ -149,6 +153,8 @@ export function WorldMap({
             renderer.current!.stats.drawTimes.slice(-120),
           );
           el.dataset.hits = JSON.stringify(renderer.current!.hits);
+          el.dataset.resourceHits = JSON.stringify(renderer.current!.resourceHits);
+          el.dataset.resourceGroups = String(renderer.current!.resources.length);
         }
       }
       request = requestAnimationFrame(draw);
@@ -316,7 +322,11 @@ export function WorldMap({
             const p = point(e),
               id = renderer.current?.pick(p.x, p.y);
             if (id !== null && id !== undefined) { setPickedTile(null); onSelect(id); }
-            else { setPickedTile(pickSurface(p,current.current.frame,current.current.camera,current.current.size)); }
+            else {
+              const stock=renderer.current?.pickResource(p.x,p.y);
+              if(stock){setPickedTile(null);setResourceSelection({key:stock.key});}
+              else setPickedTile(pickSurface(p,current.current.frame,current.current.camera,current.current.size));
+            }
           }
           pointers.current.delete(e.pointerId);
           if (pointers.current.size === 0) pinched.current = false;
@@ -336,6 +346,7 @@ export function WorldMap({
             : "Opening the world…"}
         </div>
       )}
+      {resourceSelection&&<ResourceEvidence groups={resourceGroups(frame,camera,size).filter(g=>{const p=projectSurface({x:g.x+.85,y:g.y+1},frame,camera,size);return p.x>=0&&p.x<=size.w&&p.y>=0&&p.y<=size.h||g.key===resourceSelection.key;})} selected={resourceSelection.key} tick={frame.tick} close={()=>setResourceSelection(null)} onTile={p=>{setResourceSelection(null);setPickedTile({x:p.x,y:p.y});}}/>}
       {pickedTile && <TileEvidence tile={pickedTile} frame={frame} close={()=>setPickedTile(null)}/>}
       <div className="exp-compass" aria-hidden="true">
         <span>N</span>
@@ -375,6 +386,7 @@ export function WorldMap({
           <Icon name="home" />
         </button>
       </div>
+      <button className="exp-resource-control exp-icon" aria-label="Inspect resources" title="Inspect resources" onClick={()=>setResourceSelection({key:null})}><Icon name="world"/></button>
       <div className="exp-map-caption" aria-hidden="true">
         {hover || "Drag to wander · Select a resident"}
       </div>

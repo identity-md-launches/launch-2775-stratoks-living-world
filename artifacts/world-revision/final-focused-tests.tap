@@ -1,0 +1,26 @@
+✔ primitive intentions cannot make a false work/rest/fishing pose (2.101377ms)
+✔ fishing casts only with actual phase and obtainable line; no catch frame is invented (0.619063ms)
+✔ loads and construction follow confirmed inventory/materials instead of destination plans (0.517049ms)
+✔ defect 4: repair phase requires work tool and repair material, never food alone (0.422996ms)
+✔ new activity art needs actual work, local object, input and heat/water (0.633154ms)
+✔ finding f08d8a7: a held berry never turns wood work into berry picking (0.5428ms)
+✔ tool-free wood and stick work never selects a prop-bearing cell, even with carried food (4.390281ms)
+✔ acf64fa: Vizigu after four ordinary checkpoint ticks gathers wood with bare hands (1109.349642ms)
+✔ all zoom levels preserve each stock once, exact quantities and real member anchors (79.450826ms)
+✔ checkpoint overview bounds visible wood markers on desktop and mobile (38.96419ms)
+✔ legacy frames without clusters have identical grouping; no quantities depend on summaries (31.282769ms)
+✔ defect 3: connected cliffs expose only drops; water banks and snow use real terrain kinds (15.796119ms)
+✔ terrain picking and query cover all four corners, negative chunks, raised ground, zoom and aspect (749.551552ms)
+✔ off-world and unknown terrain cannot be picked or invented by relief (0.660174ms)
+✔ connected contour deforms the complete crest AND toe, with shared corners and exact picking (6.436726ms)
+✔ contour mesh joins identical edges across corners, negative coordinates and streamed view overlap (7.155883ms)
+✔ bounded viewport cache reuses unchanged ticks and invalidates camera, terrain and world identity (74.948381ms)
+✔ worn paint uses reported shelters and adjacent travel without crossing blocked land or water (2.521043ms)
+ℹ tests 18
+ℹ suites 0
+ℹ pass 18
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4496.409944

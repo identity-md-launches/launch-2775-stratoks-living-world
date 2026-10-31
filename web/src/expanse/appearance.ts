@@ -4,7 +4,7 @@ export function constructionStage(site: NonNullable<WorldFrame['view']['sites']>
   if (!Object.values(site.materials).some(n=>n>0)) return 'marker';
   return site.stage>=1 ? 'frame' : 'foundation';
 }
-export type Pose = 'idle' | 'walk' | 'rest' | 'sleep' | 'gather' | 'chop' | 'pickup' | 'work' | 'carry' | 'hold' | 'build' | 'fish' | 'plant' | 'tend' | 'harvest' | 'cook';
+export type Pose = 'idle' | 'walk' | 'rest' | 'sleep' | 'gather' | 'chop' | 'work' | 'carry' | 'hold' | 'build' | 'fish' | 'plant' | 'tend' | 'harvest' | 'cook';
 const WOOD_NODES = new Set(['tree', 'deadfall', 'driftwood', 'scrub']);
 export function carried(r: Resident, f: WorldFrame) {
   return r.carrying ?? (f.inspector?.id === r.id ? f.inspector.inventory : {});
@@ -31,7 +31,7 @@ export function residentPose(r: Resident, f: WorldFrame, moving: boolean): Pose 
     const node=(f.view.nodes ?? []).find(([,,x,y])=>x===r.target!.x&&y===r.target!.y&&near({x,y}));
     if (node && node[4]>0) {
       if (r.item==='berry' && node[1]==='bush') return 'gather';
-      if ((r.item==='wood'||r.item==='stick') && WOOD_NODES.has(node[1])) return workTool ? 'chop' : 'pickup';
+      if ((r.item==='wood'||r.item==='stick') && WOOD_NODES.has(node[1])) return workTool ? 'chop' : 'work';
       return 'work';
     }
   }
@@ -48,9 +48,9 @@ export function residentSprite(r: Resident, f: WorldFrame, moving: boolean, dire
   if(pose==='rest') return 'rest.settle';
   if(pose==='build') return phase%2 ? 'build.raise.0' : 'build.strike.0';
   if(pose==='gather') return ['gather.reach','gather.crouch','gather.lift'][phase%3];
-  // Wood work: a held work tool swings; bare hands lift a piece from the stock.
+  // The build atlas contains a mallet, including ready/lower. Bare-hand work
+  // uses the neutral actor plus the renderer's target-directed hand gesture.
   if(pose==='chop') return phase%2 ? 'build.raise.1' : 'build.strike.1';
-  if(pose==='pickup') return phase%2 ? 'build.ready' : 'build.lower';
   if(pose==='carry'||pose==='hold') {
     if ((load.wood ?? 0)>0) return `carry.wood.${pose==='carry'?phase%2:0}`;
     if ((load.berry ?? 0)>0) return 'carry.berries';

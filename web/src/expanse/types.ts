@@ -176,6 +176,7 @@ export type WorldFrame = {
     sites?: {id:number; x:number; y:number; kind:string; stage:number; materials:Record<string,number>; need:Record<string,number>; work:number; workNeed:number}[];
     stores?: {shelter:number; x:number; y:number; items:Record<string,number>;ruined?:boolean}[];
     piles?: {id:string; x:number; y:number; items:Record<string,number>;ruined?:boolean}[];
+    pileClusters?: {v:number;cell:number;clusters:{key:string;members:{id:string|number|null;x:number;y:number;units:number}[]}[]};
     living?: number;
   };
   minimap: {

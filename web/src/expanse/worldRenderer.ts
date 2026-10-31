@@ -3,8 +3,9 @@ import { drawVariant, type Region } from "./variants";
 const REGIONS = new Set(["forest", "desert", "cold", "coast"]);
 import { residentPose, residentSprite, carried, constructionStage } from "./appearance";
 export { residentPose } from "./appearance";
+import { resourceGroups, type ResourceGroup, type ResourceHit } from './resources';
 import { scale, type Size, type Point } from "./projection";
-import { GroundCache, WATER, drawTerrainTile } from "./ground";
+import { GroundCache, WATER } from "./ground";
 import { projectSurface, pickSurface } from "./surface";
 import { settlementWear, WornPaths, type WornSegment } from "./paths";
 import type { Camera, Resident, WorldFrame } from "./types";
@@ -51,6 +52,10 @@ export class WorldRenderer {
   private received = 0;
   private tick: number | undefined;
   hits: { id: number; x: number; y: number; r: number; depth: number; tileX: number; tileY: number }[] = [];
+  resourceHits:ResourceHit[]=[];
+  resources:ResourceGroup[]=[];
+  private resourceFrame:WorldFrame|null=null;
+  private resourceScale=0;
   private picking: {f:WorldFrame;c:Camera;size:Size}|null=null;
   stats = {
     drawn: 0,
@@ -191,7 +196,7 @@ export class WorldRenderer {
     // a connected face is occluded instead of floating over the cached terrain.
     for(let y=v.y0;y<v.y0+v.h;y++)for(let x=v.x0;x<v.x0+v.w;x++)if(v.tiles[(y-v.y0)*v.w+x-v.x0]===7){
       const p=project({x:x+.5,y:y+.5},c,size);
-      if(p.x>-s&&p.x<size.w+s&&p.y>-s*2&&p.y<size.h+s*2)objects.push({depth:p.depth,draw:()=>drawTerrainTile(ctx,this.art,f,x,y,c,size)});
+      if(p.x>-s&&p.x<size.w+s&&p.y>-s*2&&p.y<size.h+s*2)objects.push({depth:p.depth,draw:()=>this.ground.drawOccluder(ctx,f,x,y,c,size)});
     }
     let drawn = 0,
       culled = 0;
@@ -263,18 +268,46 @@ export class WorldRenderer {
       const n=Object.values(site.need).reduce((a,b)=>a+b,0), delivered=Object.values(site.materials).reduce((a,b)=>a+b,0);
       if(delivered>0) objects.push({depth:p.depth+.2,draw:()=>{ctx.fillStyle='#25332d';ctx.fillRect(p.x-s*.65,p.y+s*.2,s*1.3,Math.max(3,s*.1));ctx.fillStyle='#e8c36e';ctx.fillRect(p.x-s*.65,p.y+s*.2,s*1.3*Math.min(delivered/n,site.work/site.workNeed),Math.max(3,s*.1));}});
     }
-    for(const stock of [...(v.piles ?? []),...(v.stores ?? [])]) {
+    if(this.resourceFrame!==f||this.resourceScale!==s){this.resources=resourceGroups(f,c,size);this.resourceFrame=f;this.resourceScale=s;}
+    this.resourceHits=[];
+    for(const stock of this.resources) {
       const p=project({x:stock.x+.85,y:stock.y+1},c,size);
-      if(!visible(p,s*3))continue;
-      const items=Object.entries(stock.items).filter(([,n])=>n>0);
-      if(!items.length)continue;
+      if(!visible(p,s*2))continue;
+      const grouped=stock.members.length>1;
+      // Quantities change volume discretely; all exact item counts are disclosed
+      // on selection. Overview groups use low compact silhouettes, not repeated
+      // copies of the single log bundle or overlapping numeric badges.
+      const radius=s*(.28+stock.size*.1);
+      this.resourceHits.push({key:stock.key,x:p.x,y:p.y-radius*.3,r:Math.max(12,radius),depth:p.depth});
       drawn++;
       objects.push({depth:p.depth+.1,draw:()=>{
-        if(stock.items.wood>0) drawSprite(ctx,this.art,'forest.stock.wood',p.x-s*.4,p.y,s*(1.3+.15*Math.min(6,stock.items.wood)));
-        if(stock.items.stone>0) drawSprite(ctx,this.art,'desert.stock.stone-reeds',p.x+s*.4,p.y,s*(1.2+.1*Math.min(6,stock.items.stone)));
-        // Food/material containers are generic; exact item quantities stay in evidence.
-        const other=items.filter(([k])=>!['wood','stone'].includes(k)).reduce((n,[,q])=>n+q,0);
-        if(other>0){const volume=.16+.01*Math.min(12,other);ctx.fillStyle='#846247';ctx.strokeStyle='#b29b6c';ctx.lineWidth=1;ctx.beginPath();ctx.ellipse(p.x+s*.4,p.y-s*.12,s*volume,s*volume*.6,0,0,Math.PI*2);ctx.fill();ctx.stroke();}
+        if(stock.kind==='store'){
+          const w=radius*1.5,h=radius*(.5+stock.size*.13);
+          ctx.fillStyle='#72543d';ctx.fillRect(p.x-w/2,p.y-h,w,h);
+          ctx.fillStyle='#ad9466';ctx.beginPath();ctx.ellipse(p.x,p.y-h,w/2,w*.2,0,0,7);ctx.fill();
+          ctx.strokeStyle='#d1b782';ctx.lineWidth=Math.max(.7,s*.035);ctx.strokeRect(p.x-w/2,p.y-h,w,h);
+        }else if(grouped){
+          ctx.fillStyle='#3d463b55';ctx.beginPath();ctx.ellipse(p.x,p.y,radius*1.2,radius*.48,0,0,7);ctx.fill();
+          if(stock.items.wood>0){
+            // A quantity-aware stacked cross-section (1–4 tiers), clearly a
+            // summary of timber, without copying one tall bundle per member.
+            const log=Math.max(1.6,radius*.22);
+            for(let row=0;row<stock.size;row++)for(let col=0;col<stock.size-row;col++){
+              const x=p.x+(col-(stock.size-row-1)/2)*log*1.75,y=p.y-row*log*1.35-log;
+              ctx.fillStyle='#715037';ctx.beginPath();ctx.ellipse(x,y,log,log*.75,-.15,0,7);ctx.fill();
+              ctx.fillStyle='#c7a572';ctx.beginPath();ctx.ellipse(x+log*.2,y-log*.15,log*.64,log*.49,-.15,0,7);ctx.fill();
+            }
+          }else{
+            ctx.fillStyle=stock.items.stone>0?'#89958c':'#a48757';
+            for(let k=0;k<stock.size;k++){ctx.beginPath();ctx.ellipse(p.x+(k-(stock.size-1)/2)*radius*.4,p.y-radius*(.15+(k%2)*.2),radius*.4,radius*.3,-.4,0,7);ctx.fill();}
+          }
+          // A small linked pair marks aggregation without inventing a building.
+          ctx.strokeStyle='#f4e4ba';ctx.lineWidth=1.2;ctx.beginPath();ctx.arc(p.x+radius*.65,p.y-radius*.95,2.2,0,7);ctx.arc(p.x+radius*.9,p.y-radius*.95,2.2,0,7);ctx.stroke();
+        }else{
+          if(stock.items.wood>0)drawSprite(ctx,this.art,'forest.stock.wood',p.x,p.y,s*(.9+.2*stock.size));
+          if(stock.items.stone>0)drawSprite(ctx,this.art,'desert.stock.stone-reeds',p.x+s*.25,p.y,s*(.9+.15*stock.size));
+          if(Object.keys(stock.items).some(k=>!['wood','stone'].includes(k))){ctx.fillStyle='#98774e';ctx.beginPath();ctx.ellipse(p.x+s*.3,p.y-s*.12,radius*.5,radius*.3,0,0,7);ctx.fill();}
+        }
       }});
     }
     for (const [,x,y] of v.fires) {
@@ -436,6 +469,15 @@ export class WorldRenderer {
     this.stats.frames++;
     this.stats.drawTimes.push(performance.now() - start);
     if (this.stats.drawTimes.length > 300) this.stats.drawTimes.shift();
+  }
+  pickResource(x:number,y:number):ResourceGroup|null {
+    const context=this.picking,terrain=context?pickSurface({x,y},context.f,context.c,context.size):null;
+    for(const hit of this.resourceHits.filter(h=>Math.hypot(h.x-x,h.y-y)<=h.r).sort((a,b)=>b.depth-a.depth)){
+      const group=this.resources.find(g=>g.key===hit.key)!;
+      const blocked=terrain&&context&&context.f.view.tiles[(terrain.y-context.f.view.y0)*context.f.view.w+terrain.x-context.f.view.x0]===7&&terrain.x+terrain.y>group.x+group.y;
+      if(!blocked)return group;
+    }
+    return null;
   }
   pick(x: number, y: number): number | null {
     let best: number | null = null, depth=-Infinity;

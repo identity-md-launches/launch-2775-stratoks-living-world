@@ -1,0 +1,49 @@
+{
+  "tick": 12604,
+  "query": {
+    "x": -23,
+    "y": -23,
+    "w": 94,
+    "h": 94
+  },
+  "piles": 956,
+  "serverClusters": 307,
+  "results": [
+    {
+      "width": 1440,
+      "canvasHeight": 764,
+      "span": 22,
+      "cell": 4,
+      "individualWoodAnchors": 122,
+      "groupedWoodAnchors": 52,
+      "allGroupAnchors": 64
+    },
+    {
+      "width": 1440,
+      "canvasHeight": 764,
+      "span": 41.725067385444746,
+      "cell": 8,
+      "individualWoodAnchors": 420,
+      "groupedWoodAnchors": 86,
+      "allGroupAnchors": 126
+    },
+    {
+      "width": 390,
+      "canvasHeight": 706,
+      "span": 9.5,
+      "cell": 8,
+      "individualWoodAnchors": 80,
+      "groupedWoodAnchors": 13,
+      "allGroupAnchors": 17
+    },
+    {
+      "width": 390,
+      "canvasHeight": 706,
+      "span": 18.287895310796074,
+      "cell": 16,
+      "individualWoodAnchors": 205,
+      "groupedWoodAnchors": 18,
+      "allGroupAnchors": 26
+    }
+  ]
+}

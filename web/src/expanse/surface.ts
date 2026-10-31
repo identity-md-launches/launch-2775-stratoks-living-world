@@ -1,27 +1,22 @@
-import { terrainHeight, exposedFaces } from '../../../shared/relief.js';
+import { exposedFaces } from '../../../shared/relief.js';
 import { project, unproject, scale, type Point, type Size } from './projection';
 import type { Camera, WorldFrame } from './types';
-export function tileAt(f: WorldFrame, x: number, y: number) {
-  const v=f.view;
-  return x>=v.x0 && y>=v.y0 && x<v.x0+v.w && y<v.y0+v.h ? v.tiles[(y-v.y0)*v.w+x-v.x0] : -1;
-}
-export function heightAt(f: WorldFrame, x: number, y: number) {
-  const v=f.view, t=tileAt(f,x,y);
-  return t<0 ? 0 : v.heights?.[(y-v.y0)*v.w+x-v.x0] ?? terrainHeight(t);
-}
+import { tileAt, heightAt, contourEdges } from './contours';
+export { tileAt, heightAt } from './contours';
 export function projectSurface(p: Point, f: WorldFrame, c: Camera, size: Size, height=heightAt(f,Math.floor(p.x),Math.floor(p.y))) {
   const q=project(p,c,size);
   return {x:q.x,y:q.y-height*scale(c,size),depth:q.y};
 }
 export function surfaceGeometry(f: WorldFrame, x: number, y: number, c: Camera, size: Size) {
   const h=heightAt(f,x,y), s=scale(c,size), p=projectSurface({x:x+.5,y:y+.5},f,c,size,h);
-  const top=[{x:p.x,y:p.y-s/2},{x:p.x+s,y:p.y},{x:p.x,y:p.y+s/2},{x:p.x-s,y:p.y}];
+  const edges=contourEdges(f,x,y).map(edge=>edge.map(q=>projectSurface(q,f,c,size,h)));
+  const top=edges.flatMap(edge=>edge.slice(0,-1));
   // Missing viewport neighbours are unknown, not an invented drop. World edges
   // are explicit outer faces. Queries include a halo so visible edges are known.
   const neighbor=(nx:number,ny:number)=>tileAt(f,nx,ny)<0 && nx>=f.bounds.x0 && ny>=f.bounds.y0 && nx<f.bounds.x1 && ny<f.bounds.y1 ? h : heightAt(f,nx,ny);
   const drops=exposedFaces(h,neighbor(x+1,y),neighbor(x,y+1));
-  const faces=drops.map((d,i)=>d ? [top[i+1],top[i+2],{x:top[i+2].x,y:top[i+2].y+d*s},{x:top[i+1].x,y:top[i+1].y+d*s}] : []);
-  return {p,h,top,faces};
+  const faces=drops.map((d,i)=>d ? [...edges[i+1],...edges[i+1].slice().reverse().map(q=>({x:q.x,y:q.y+d*s}))] : []);
+  return {p,h,top,faces,edges,drops};
 }
 function contains(p: Point, poly: Point[]) {
   let inside=false;

@@ -45,3 +45,7 @@ artifacts/*
 # Session recovery evidence/screenshots: explicit combined path budget 2097152 bytes.
 !artifacts/visitor-recovery/
 !artifacts/visitor-recovery/**
+
+# World repair revision: screenshots, reports and test logs have a 3 MiB path budget.
+!artifacts/world-revision/
+!artifacts/world-revision/**

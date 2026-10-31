@@ -64,7 +64,7 @@ test('finding f08d8a7: a held berry never turns wood work into berry picking',()
  const tree:[string,string,number,number,number]=['n1','tree',9,60,8], bush:[string,string,number,number,number]=['n2','bush',9,60,3];
  const ff=(node:[string,string,number,number,number])=>({...f,view:{...f.view,nodes:[node]}}) as unknown as WorldFrame;
  const wood={...r,x:10,y:60,state:'gather',phase:'gather',item:'wood',target:{x:9,y:60},carrying:{wood:3,stick:1,berry:1},tools:[] as string[]};
- assert.equal(residentPose(wood,ff(tree),false),'pickup');
+ assert.equal(residentPose(wood,ff(tree),false),'work');
  for(let n=0;n<6;n++)assert.ok(!residentSprite(wood,ff(tree),false,'se',n).startsWith('gather.'));
  assert.equal(residentPose({...wood,tools:['hand_axe']},ff(tree),false),'chop');
  assert.equal(residentPose({...wood,item:'berry'},ff(bush),false),'gather','confirmed berry gathering at a live bush');
@@ -74,4 +74,12 @@ test('finding f08d8a7: a held berry never turns wood work into berry picking',()
  assert.equal(residentPose({...wood,item:'stone'},ff(['n3','stone',9,60,4]),false),'work');
  assert.equal(residentSprite({...wood,phase:'store',state:'store'},ff(tree),false,'se',3),'carry.wood.0','stationary hold does not cycle');
  assert.equal(residentPose(wood,ff(tree),true),'carry','only motion plays the carry cycle');
+});
+test('tool-free wood and stick work never selects a prop-bearing cell, even with carried food',()=>{
+ for(const kind of ['tree','deadfall','driftwood','scrub'])for(const item of ['wood','stick'])for(const carrying of [{},{berry:1},{wood:2}] as Record<string,number>[]){
+  const worker={...r,x:58,y:61,state:'gather',phase:'gather',item,target:{x:57,y:60},carrying,tools:[]};
+  const ff={...f,view:{...f.view,nodes:[['live',kind,57,60,8]]}} as WorldFrame;
+  assert.equal(residentPose(worker,ff,false),'work');
+  for(const direction of ['se','sw','ne','nw'])for(let phase=0;phase<6;phase++)assert.ok(residentSprite(worker,ff,false,direction,phase).startsWith('idle.'),'the hand gesture and inventory are rendered separately');
+ }
 });

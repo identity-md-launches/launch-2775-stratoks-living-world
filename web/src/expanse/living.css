@@ -104,7 +104,6 @@
   background: color-mix(in srgb, var(--hud) 94%, transparent);
   border: 1px solid var(--hud-line);
   border-radius: 10px;
-  box-shadow: 0 4px 14px #1d2b2533;
 }
 .exp-context h1 {
   font: 600 14px/1.2 var(--font, inherit);
@@ -178,3 +177,15 @@
 @media (max-width: 420px) {
   .exp-context-climate { display: none; }
 }
+/* One disclosure control replaces overlapping per-pile numeric badges. */
+.exp-resource-control { position:absolute;right:24px;top:70px;width:44px;height:44px;background:var(--hud);color:var(--hud-text);border-radius:8px; }
+.exp-resource-control:hover {background:var(--hud-hover);}
+.exp-resource-evidence {width:420px;}
+.exp-stock-total,.exp-stock-members {font-variant-numeric:tabular-nums;overflow-wrap:anywhere;}
+.exp-stock-groups,.exp-stock-members {list-style:none;padding:0;margin:12px 0;}
+.exp-stock-groups button {display:grid;gap:4px;width:100%;min-height:44px;text-align:start;padding:12px 0;background:transparent;color:var(--hud-text);border-bottom:1px solid var(--hud-line);}
+.exp-stock-groups button:hover {background:var(--hud-raised);}
+.exp-stock-groups span {font-size:12px;color:var(--hud-muted);overflow-wrap:anywhere;}
+.exp-stock-members li {padding:12px 0;border-bottom:1px solid var(--hud-line);}
+.exp-stock-members p {margin-block:6px 12px;}
+@media(max-width:700px){.exp-resource-control{right:16px;top:68px;}}

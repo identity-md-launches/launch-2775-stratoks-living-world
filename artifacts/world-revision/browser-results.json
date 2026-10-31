@@ -1,0 +1,431 @@
+{
+  "captures": [
+    {
+      "file": "before-desktop-settlement.jpg",
+      "camera": {
+        "span": 22,
+        "x": 24,
+        "y": 24
+      },
+      "tick": 12604
+    },
+    {
+      "file": "before-desktop-overview.jpg",
+      "camera": {
+        "span": 41.725067385444746,
+        "x": 24,
+        "y": 24
+      },
+      "tick": 12604
+    },
+    {
+      "file": "before-desktop-cold.jpg",
+      "camera": {
+        "span": 22,
+        "x": 25.522123893805315,
+        "y": -50.05309734513274
+      },
+      "tick": 12604
+    },
+    {
+      "file": "before-desktop-coast.jpg",
+      "camera": {
+        "span": 22,
+        "x": -40.141592920353986,
+        "y": 21.805309734513287
+      },
+      "tick": 12604
+    },
+    {
+      "file": "before-desktop-islands.jpg",
+      "camera": {
+        "span": 22,
+        "x": -61.203539823008846,
+        "y": 78.79646017699113
+      },
+      "tick": 12604
+    },
+    {
+      "file": "before-desktop-barehand.jpg",
+      "camera": {
+        "span": 9,
+        "x": 58.5,
+        "y": 61.5
+      },
+      "tick": 12604
+    },
+    {
+      "file": "before-mobile-settlement.jpg",
+      "camera": {
+        "span": 9.5,
+        "x": 24,
+        "y": 24
+      },
+      "tick": 12604
+    },
+    {
+      "file": "before-mobile-overview.jpg",
+      "camera": {
+        "span": 18.287895310796074,
+        "x": 24,
+        "y": 24
+      },
+      "tick": 12604
+    },
+    {
+      "file": "before-mobile-cold.jpg",
+      "camera": {
+        "span": 9.5,
+        "x": 25.05263157894737,
+        "y": -50.10526315789474
+      },
+      "tick": 12604
+    },
+    {
+      "file": "before-mobile-coast.jpg",
+      "camera": {
+        "span": 9.5,
+        "x": -41.263157894736835,
+        "y": 22.10526315789474
+      },
+      "tick": 12604
+    },
+    {
+      "file": "before-mobile-islands.jpg",
+      "camera": {
+        "span": 9.5,
+        "x": -60.42105263157895,
+        "y": 79.57894736842107
+      },
+      "tick": 12604
+    },
+    {
+      "file": "before-mobile-barehand.jpg",
+      "camera": {
+        "span": 9,
+        "x": 58.5,
+        "y": 61.5
+      },
+      "tick": 12604
+    },
+    {
+      "file": "after-desktop-settlement.jpg",
+      "camera": {
+        "span": 22,
+        "x": 24,
+        "y": 24
+      },
+      "tick": 12604
+    },
+    {
+      "file": "after-desktop-overview.jpg",
+      "camera": {
+        "span": 41.725067385444746,
+        "x": 24,
+        "y": 24
+      },
+      "tick": 12604
+    },
+    {
+      "file": "after-desktop-resources.jpg",
+      "camera": {
+        "span": 41.725067385444746,
+        "x": 24,
+        "y": 24
+      },
+      "tick": 12604
+    },
+    {
+      "file": "after-desktop-cold.jpg",
+      "camera": {
+        "span": 22,
+        "x": 25.522123893805315,
+        "y": -50.05309734513274
+      },
+      "tick": 12604
+    },
+    {
+      "file": "after-desktop-coast.jpg",
+      "camera": {
+        "span": 22,
+        "x": -40.141592920353986,
+        "y": 21.805309734513287
+      },
+      "tick": 12604
+    },
+    {
+      "file": "after-desktop-islands.jpg",
+      "camera": {
+        "span": 22,
+        "x": -61.203539823008846,
+        "y": 78.79646017699113
+      },
+      "tick": 12604
+    },
+    {
+      "file": "after-desktop-barehand.jpg",
+      "camera": {
+        "span": 9,
+        "x": 58.5,
+        "y": 61.5
+      },
+      "tick": 12604
+    },
+    {
+      "file": "after-mobile-settlement.jpg",
+      "camera": {
+        "span": 9.5,
+        "x": 24,
+        "y": 24
+      },
+      "tick": 12604
+    },
+    {
+      "file": "after-mobile-overview.jpg",
+      "camera": {
+        "span": 18.287895310796074,
+        "x": 24,
+        "y": 24
+      },
+      "tick": 12604
+    },
+    {
+      "file": "after-mobile-resources.jpg",
+      "camera": {
+        "span": 18.287895310796074,
+        "x": 24,
+        "y": 24
+      },
+      "tick": 12604
+    },
+    {
+      "file": "after-mobile-cold.jpg",
+      "camera": {
+        "span": 9.5,
+        "x": 25.05263157894737,
+        "y": -50.10526315789474
+      },
+      "tick": 12604
+    },
+    {
+      "file": "after-mobile-coast.jpg",
+      "camera": {
+        "span": 9.5,
+        "x": -41.263157894736835,
+        "y": 22.10526315789474
+      },
+      "tick": 12604
+    },
+    {
+      "file": "after-mobile-islands.jpg",
+      "camera": {
+        "span": 9.5,
+        "x": -60.42105263157895,
+        "y": 79.57894736842107
+      },
+      "tick": 12604
+    },
+    {
+      "file": "after-mobile-barehand.jpg",
+      "camera": {
+        "span": 9,
+        "x": 58.5,
+        "y": 61.5
+      },
+      "tick": 12604
+    },
+    {
+      "file": "after-320-first-screen.jpg",
+      "camera": {
+        "span": 9,
+        "x": 25.968749999999996,
+        "y": 22.031249999999996
+      },
+      "tick": 12604
+    }
+  ],
+  "checks": [
+    {
+      "name": "before-desktop real resident #100 state",
+      "data": {
+        "tick": 12604,
+        "resident": {
+          "id": 100,
+          "name": "Vizigu",
+          "x": 58,
+          "y": 61,
+          "health": 100,
+          "action": "gather",
+          "state": "gather",
+          "phase": "gather",
+          "progress": 0.17,
+          "load": 0,
+          "carrying": {},
+          "tools": [],
+          "target": {
+            "x": 57,
+            "y": 60
+          },
+          "item": "wood",
+          "goal": "social",
+          "chain": null
+        }
+      }
+    },
+    {
+      "name": "before-mobile real resident #100 state",
+      "data": {
+        "tick": 12604,
+        "resident": {
+          "id": 100,
+          "name": "Vizigu",
+          "x": 58,
+          "y": 61,
+          "health": 100,
+          "action": "gather",
+          "state": "gather",
+          "phase": "gather",
+          "progress": 0.17,
+          "load": 0,
+          "carrying": {},
+          "tools": [],
+          "target": {
+            "x": 57,
+            "y": 60
+          },
+          "item": "wood",
+          "goal": "social",
+          "chain": null
+        }
+      }
+    },
+    {
+      "name": "after-desktop no horizontal scroll",
+      "passed": true
+    },
+    {
+      "name": "after-desktop resources open by keyboard",
+      "passed": true
+    },
+    {
+      "name": "after-desktop exact members disclosed",
+      "passed": true
+    },
+    {
+      "name": "after-desktop disclosed quantities match received frame",
+      "passed": true,
+      "members": 16
+    },
+    {
+      "name": "after-desktop Escape restores focus",
+      "passed": true
+    },
+    {
+      "name": "after-desktop a stock marker opens resource evidence",
+      "passed": true
+    },
+    {
+      "name": "after-desktop real resident #100 state",
+      "data": {
+        "tick": 12604,
+        "resident": {
+          "id": 100,
+          "name": "Vizigu",
+          "x": 58,
+          "y": 61,
+          "health": 100,
+          "action": "gather",
+          "state": "gather",
+          "phase": "gather",
+          "progress": 0.17,
+          "load": 0,
+          "carrying": {},
+          "tools": [],
+          "target": {
+            "x": 57,
+            "y": 60
+          },
+          "item": "wood",
+          "goal": "social",
+          "chain": null
+        }
+      }
+    },
+    {
+      "name": "after-mobile no horizontal scroll",
+      "passed": true
+    },
+    {
+      "name": "after-mobile resources open by keyboard",
+      "passed": true
+    },
+    {
+      "name": "after-mobile exact members disclosed",
+      "passed": true
+    },
+    {
+      "name": "after-mobile disclosed quantities match received frame",
+      "passed": true,
+      "members": 58
+    },
+    {
+      "name": "after-mobile Escape restores focus",
+      "passed": true
+    },
+    {
+      "name": "after-mobile a stock marker opens resource evidence",
+      "passed": true
+    },
+    {
+      "name": "after-mobile real resident #100 state",
+      "data": {
+        "tick": 12604,
+        "resident": {
+          "id": 100,
+          "name": "Vizigu",
+          "x": 58,
+          "y": 61,
+          "health": 100,
+          "action": "gather",
+          "state": "gather",
+          "phase": "gather",
+          "progress": 0.17,
+          "load": 0,
+          "carrying": {},
+          "tools": [],
+          "target": {
+            "x": 57,
+            "y": 60
+          },
+          "item": "wood",
+          "goal": "social",
+          "chain": null
+        }
+      }
+    },
+    {
+      "name": "320px no horizontal scroll",
+      "passed": true
+    },
+    {
+      "name": "keyboard terrain inspection",
+      "passed": true
+    },
+    {
+      "name": "tile dialog returns canvas focus",
+      "passed": true
+    },
+    {
+      "name": "short phone close remains reachable",
+      "passed": true
+    },
+    {
+      "name": "no browser or local resource errors",
+      "passed": true
+    }
+  ],
+  "errors": [],
+  "performance": [],
+  "limitations": [],
+  "webkit": "unavailable: browserType.launch:  ╔══════════════════════════════════════════════════════╗ ║ Host system is missing dependencies to run browsers. ║ ║ Missing libraries:                                   ║ ║     libgtk-4.so.1                                    ║ ║     libpangocairo-1.0.so.0                           ║"
+}
