@@ -1,0 +1,100 @@
+# Resource carpet diagnosis, activity chains and persistence: validation
+
+Scope of this component: backend simulation (`server/`), shared helper (`shared/stockpiles.js`), tests, docs. Base:
+`d0ee752960b66ac04c8f36964e195d9409d97bfb`. No web/renderer, art, wallet or deployment files were changed; the
+wallet/auth code and its tests are untouched and still pass. Nothing was deployed. Design and interface:
+[server/docs/CHAINS.md](../../server/docs/CHAINS.md).
+
+## 1. Diagnosis: what the "logs" are
+
+Measured on the shipped schema-5 demo checkpoint (`web/public/demo/agency-checkpoint.json.gz`, seed 2, tick 12,600,
+168 residents) with the **base** engine (`test` harness instrumenting `perform`, 1000 ticks):
+
+* The log sprites are drawn by the renderer for (a) `deadfall`/`driftwood` nodes (`worldRenderer.ts:212`, 136 such
+  nodes in the 29 saved chunks — natural, bounded) and (b) **every ground pile containing wood**
+  (`worldRenderer.ts:265`). At tick 12,600 there were **1,119 ground piles holding 1,616 wood**, plus 636 wood in
+  shelter stores.
+* They are **real stocks, not rendering duplication**: `holdings()` equals the ledger `expectedHoldings(totals)` for
+  every item (exact, before and after).
+* Growth is **runaway scattering of real surplus**: in 1,000 ticks residents performed 807 `place` steps (529 wood)
+  creating 258 new piles, made 1,071 ignition attempts and lit 6 fires; 478 `carry` steps moved the same fuel back
+  and forth. 580 of 616 wood gathers were by residents with warmth > 80 (no warmth need). Death drops contributed
+  only 17 item stacks.
+* Causes in code: `place` offered for any held fuel on any tile with no demand; the step reward paid a flat
+  acquisition drive (`0.12 × items`) for every gathered unit, so gathering surplus was learned as rewarding; ground
+  piles could only be picked up from the resident's own tile as a first step; deposits targeted stores the resident
+  had seen full; total consumption (build 299 + repair 60 + burned 120 wood over the world's life) was far below
+  production (3,851 wood).
+
+## 2. Fix (accounting-preserving)
+
+Demand-aware `place`/consolidation, hauling of perceived piles, storage-aware deposits, demand-gated acquisition
+drive and need bias, tool wear for hand axe/club and `mend` consumption. Nothing is deleted, hidden, reset or moved
+for composition; no stock is created or destroyed outside the existing designed rules. See CHAINS.md for the table.
+
+## 3. Results (unattended; no injected jobs/items; raw JSON in `tests/results/chains/`)
+
+Same inputs, base engine vs updated engine (`tests/experiments/resource-chains.mjs`, base engine run from a
+worktree of d0ee752):
+
+| Run | Ground piles start → end (before) | (after) | Pile units end before / after | Ledger | ms/tick mean before / after |
+|---|---|---|---|---|---|
+| demo checkpoint, 168 res., 2000 ticks | 1119 → 1408 | 1119 → 863 | 2879 / 2020 (wood 2140 / 1496) | exact / exact | 17.1 / 17.7 |
+| **fixture 324 res., 1000 ticks** | 601 → 963 | 601 → 337 | +582 / −351 per 1000 | exact / exact | 46.8 / 51.3 (p95 94 / 114) |
+| seed 3, 40 res., 5000 ticks | 0 → 581 | 0 → 28 | 1045 / 64 | exact / exact | 5.9 / 5.6 |
+| seed 7, 40 res., 5000 ticks | 0 → 631 | 0 → 6 | 1062 / 8 | exact / exact | 6.4 / 5.7 |
+| seed 13, 40 res., 5000 ticks | 0 → 568 | 0 → 26 | 1037 / 97 | exact / exact | 6.1 / 6.5 |
+
+Hauled stock goes to stores (stored units at 5000 ticks: 579/683/517 before → 988/992/973 after) and to use
+(build/repair/mend). Store capacity (40/shelter) is unchanged.
+
+Chain frequencies after the change (5000 ticks, 40 residents):
+
+| Seed | materials (by use) | food (by outcome) | explore started / found / returned / settled / failed | replans |
+|---|---|---|---|---|
+| 3 | build 152, mend:fish_line 9 | eaten 1698, shared 551, stored 125 | 34 / 25 / 19 / 3 / 5 | found 25, site-finished 6 |
+| 7 | build 168, mend:fish_line 17, mend:hand_axe 4 | eaten 1269, shared 454, stored 80 | 21 / 17 / 11 / 2 / 4 | danger 22, found 17, site-finished 4, attacked 2, threatened 1 |
+| 13 | build 185, mend:fish_line 9, repair 1 | eaten 1760, shared 621, stored 105 | 30 / 22 / 10 / 2 / 8 | found 22, site-finished 7, danger 2, attacked 1 |
+
+Demo checkpoint (2000 ticks): materials 113 (build 51, repair 26, repair-help 3, mend 33; 37 passed through a
+store), food 1658 (eaten 1246, shared 372, stored 40), explore 36 started / 20 found / 7 returned / 11 failed;
+replans danger 47, hunger 31, found 20, attacked 13, repair-done 8, threatened 6, site-finished 1. Durations
+(median / p90 ticks, last 300 log entries): materials 685 / 1845, food 2 / 36, explore 919 / 1838.
+
+Population/births are systemic and change with behaviour: end population before/after 80/77, 82/61, 87/88 (seed 7
+had 21 instead of 42 births); 0–3 deaths per run. This is reported, not tuned away.
+
+## 4. Persistence and preservation
+
+`tests/fixtures/expanse-v5-300/` is a **synthetic FIXTURE** (seed 11, 320 initial → 324 residents, tick 1500, 601
+ground piles / 933 units), generated by the **base** engine so it carries the carpet; it is not owner data.
+`tests/chains.test.js` verifies on a copy in a temp directory: schema 5 and checksum; per-resident ids, names,
+parents, brains (mb-v1 weights), outcome models, episodes, goals, goal models, inventories, relationships and
+memories unchanged by load; `identityDigest` unchanged; save → backup → load; restart mid-run serializes identically;
+ledger exact before and after; no migration needed (additive fields, schema stays 5, older server ignores them).
+Rollback: stop the service, restore the pre-upgrade backup (`node server/bin/restore.js`) and run the previous
+release; saves made by this version load in the previous release because only additive fields were added.
+
+## 5. Checks run (Node 24.21.0)
+
+* `node --test --test-concurrency=8 tests/*.test.js` → **258 tests, 258 pass, 0 fail** (includes the wallet/auth
+  regressions and the 6 new chain tests).
+* `tests/agency-demo.test.js` was changed: its manifest hash pinned the exact bytes the base engine produces 600
+  ticks after migrating the demo backup. Any behaviour change breaks that, so the assertion now checks deterministic
+  replay + exact ledger + unchanged original/manifest/dist files. **The web demo checkpoint
+  (`web/public/demo/agency-checkpoint.json.gz`, `dist/demo/…`) must be regenerated by the web integration step**;
+  this component cannot write `web/` or `dist/`.
+* Frontend typecheck/build, browser frame times and captures were **not** run: no frontend files changed in this
+  component, and they belong to the art/interface/integration step.
+
+## 6. Limitations (unresolved)
+
+* The **prepare (cook)** stage of the food chain was **not observed** in any unattended run (fires are rare; cooked
+  0). The food chain is demonstrated as acquire → eat / share / store, driven by hunger and remembered stocks.
+* Surplus gathering is reduced in reward but still frequent (e.g. demo: 1051 surplus vs 44 demanded material gathers
+  in 2000 ticks): learned outcome models from the old reward decay only gradually. The surplus now ends up in stores
+  instead of scattered piles.
+* Shelter repair is a minority use of materials (most go to construction); store capacity is unchanged, so stores
+  fill and some ground piles remain.
+* Fixture tick times are single-process measurements on this machine (no 60 fps or server SLA claims).
+* Renderer integration of `pileClusters`, `size`, new activity states and decision evidence is not done here.

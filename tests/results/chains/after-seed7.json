@@ -1,0 +1,402 @@
+{
+ "engine": "this commit",
+ "source": {
+  "seed": 7,
+  "count": 40
+ },
+ "ticks": 5000,
+ "startTick": 0,
+ "endTick": 5000,
+ "start": {
+  "tick": 0,
+  "population": 40,
+  "piles": 0,
+  "pileUnits": 0,
+  "pileWood": 0,
+  "stored": 0,
+  "storedWood": 0,
+  "carried": 0
+ },
+ "end": {
+  "tick": 5000,
+  "population": 61,
+  "piles": 6,
+  "pileUnits": 8,
+  "pileWood": 2,
+  "stored": 992,
+  "storedWood": 682,
+  "carried": 254,
+  "pileItems": {
+   "wood": 2,
+   "fiber": 5,
+   "stick": 1
+  }
+ },
+ "growthPer1000": {
+  "piles": 1.2,
+  "pileUnits": 1.6,
+  "pileWood": 0.4
+ },
+ "produced": {
+  "gathered": {
+   "berry": 1333,
+   "wood": 939,
+   "stone": 326,
+   "stick": 264,
+   "fiber": 133,
+   "fish": 64,
+   "flint": 9,
+   "shellfish": 143,
+   "lichen": 14,
+   "cactus_fruit": 3
+  },
+  "crafted": {
+   "stone_club": 71,
+   "bundle": 39,
+   "fish_line": 25,
+   "hand_axe": 5
+  }
+ },
+ "consumed": {
+  "built": {
+   "wood": 175,
+   "stone": 78,
+   "fiber": 11,
+   "stick": 2
+  },
+  "repaired": {},
+  "burned": {},
+  "wornOut": {
+   "fish_line": 7
+  },
+  "mendUsed": {
+   "fiber": 17,
+   "flint": 4
+  },
+  "craftUsed": {
+   "stick": 115,
+   "stone": 71,
+   "fiber": 64,
+   "bundle": 25,
+   "flint": 5
+  },
+  "eaten": {
+   "berry": 1336,
+   "fish": 63,
+   "shellfish": 140,
+   "lichen": 14,
+   "cactus_fruit": 3
+  }
+ },
+ "movement": {
+  "placed": {
+   "fiber": 6,
+   "stick": 2,
+   "wood": 4
+  },
+  "hauled": {
+   "fiber": 1,
+   "berry": 1,
+   "wood": 2,
+   "stick": 1
+  },
+  "deposited": {
+   "wood": 768,
+   "stone": 251,
+   "berry": 104,
+   "stick": 120,
+   "fiber": 31,
+   "shellfish": 17,
+   "fish": 6
+  },
+  "retrieved": {
+   "wood": 86,
+   "stone": 92,
+   "berry": 104,
+   "shellfish": 17,
+   "fish": 6
+  }
+ },
+ "gatherDemand": {
+  "demand": 102,
+  "surplus": 1550
+ },
+ "chains": {
+  "materials": {
+   "completed": 189,
+   "stored": 86,
+   "byUse": {
+    "build": 168,
+    "mend:fish_line": 17,
+    "mend:hand_axe": 4
+   },
+   "ticks": 138062,
+   "distance": 3145
+  },
+  "food": {
+   "completed": 1803,
+   "byOutcome": {
+    "eaten": 1269,
+    "shared": 454,
+    "stored": 80
+   },
+   "cooked": 0,
+   "ticks": 25511
+  },
+  "explore": {
+   "started": 21,
+   "found": 17,
+   "returned": 11,
+   "settled": 2,
+   "failed": 4,
+   "ticks": 7186,
+   "distance": 308
+  }
+ },
+ "chainDurations": {
+  "materials": {
+   "n": 11,
+   "median": 1147,
+   "p90": 3123
+  },
+  "food": {
+   "n": 287,
+   "median": 4,
+   "p90": 32
+  },
+  "explore": {
+   "n": 2,
+   "median": 1752,
+   "p90": 1752
+  }
+ },
+ "chainExamples": [
+  {
+   "kind": "materials",
+   "tick": 4933,
+   "resident": 24,
+   "item": "flint",
+   "units": 1,
+   "use": "mend:hand_axe",
+   "target": "hand_axe",
+   "stages": [
+    "acquire:gather",
+    "use:mend:hand_axe"
+   ],
+   "stored": false,
+   "distance": 24,
+   "ticks": 147
+  },
+  {
+   "kind": "materials",
+   "tick": 4993,
+   "resident": 32,
+   "item": "stone",
+   "units": 1,
+   "use": "build",
+   "target": 41,
+   "stages": [
+    "acquire:gather",
+    "use:build"
+   ],
+   "stored": false,
+   "distance": 9,
+   "ticks": 43
+  },
+  {
+   "kind": "food",
+   "tick": 5000,
+   "resident": 9,
+   "item": "berry",
+   "outcome": "shared",
+   "cooked": false,
+   "stages": [
+    "acquire:rest",
+    "shared"
+   ],
+   "hungerAtStart": 3,
+   "hungerNow": 3,
+   "stockAtStart": 0,
+   "recipient": 20,
+   "ticks": 1
+  },
+  {
+   "kind": "food",
+   "tick": 5000,
+   "resident": 14,
+   "item": "berry",
+   "outcome": "shared",
+   "cooked": false,
+   "stages": [
+    "acquire:gather",
+    "shared"
+   ],
+   "hungerAtStart": 4,
+   "hungerNow": 4,
+   "stockAtStart": 0,
+   "recipient": 33,
+   "ticks": 11
+  },
+  {
+   "kind": "explore",
+   "tick": 4451,
+   "resident": 35,
+   "item": "stone",
+   "outcome": "returned",
+   "found": {
+    "tick": 3590,
+    "x": -26,
+    "y": 26,
+    "kind": "stone"
+   },
+   "from": {
+    "x": -6,
+    "y": 21
+   },
+   "farthest": 46,
+   "ticks": 1752
+  },
+  {
+   "kind": "explore",
+   "tick": 4640,
+   "resident": 39,
+   "item": "fiber",
+   "outcome": "returned",
+   "found": {
+    "tick": 4509,
+    "x": -3,
+    "y": 63,
+    "kind": "scrub"
+   },
+   "from": {
+    "x": 4,
+    "y": 57
+   },
+   "farthest": 26,
+   "ticks": 264
+  }
+ ],
+ "replans": {
+  "found": 17,
+  "site-finished": 4,
+  "attacked": 2,
+  "threatened": 1,
+  "danger": 22
+ },
+ "births": 21,
+ "deaths": 0,
+ "deathsByCause": {},
+ "ledger": {
+  "ok": true,
+  "bad": []
+ },
+ "perf": {
+  "msPerTickMean": 5.66,
+  "p50": 4.54,
+  "p95": 14.16,
+  "max": 119.9,
+  "rssMB": 265,
+  "heapMB": 113
+ },
+ "series": [
+  {
+   "tick": 0,
+   "population": 40,
+   "piles": 0,
+   "pileUnits": 0,
+   "pileWood": 0,
+   "stored": 0,
+   "carried": 0
+  },
+  {
+   "tick": 500,
+   "population": 40,
+   "piles": 0,
+   "pileUnits": 0,
+   "pileWood": 0,
+   "stored": 127,
+   "carried": 82
+  },
+  {
+   "tick": 1000,
+   "population": 40,
+   "piles": 0,
+   "pileUnits": 0,
+   "pileWood": 0,
+   "stored": 285,
+   "carried": 62
+  },
+  {
+   "tick": 1500,
+   "population": 40,
+   "piles": 0,
+   "pileUnits": 0,
+   "pileWood": 0,
+   "stored": 392,
+   "carried": 76
+  },
+  {
+   "tick": 2000,
+   "population": 42,
+   "piles": 0,
+   "pileUnits": 0,
+   "pileWood": 0,
+   "stored": 446,
+   "carried": 124
+  },
+  {
+   "tick": 2500,
+   "population": 42,
+   "piles": 0,
+   "pileUnits": 0,
+   "pileWood": 0,
+   "stored": 535,
+   "carried": 143
+  },
+  {
+   "tick": 3000,
+   "population": 43,
+   "piles": 3,
+   "pileUnits": 4,
+   "pileWood": 0,
+   "stored": 596,
+   "carried": 165
+  },
+  {
+   "tick": 3500,
+   "population": 46,
+   "piles": 6,
+   "pileUnits": 7,
+   "pileWood": 0,
+   "stored": 687,
+   "carried": 172
+  },
+  {
+   "tick": 4000,
+   "population": 50,
+   "piles": 8,
+   "pileUnits": 11,
+   "pileWood": 3,
+   "stored": 797,
+   "carried": 193
+  },
+  {
+   "tick": 4500,
+   "population": 54,
+   "piles": 8,
+   "pileUnits": 11,
+   "pileWood": 4,
+   "stored": 885,
+   "carried": 206
+  },
+  {
+   "tick": 5000,
+   "population": 61,
+   "piles": 6,
+   "pileUnits": 8,
+   "pileWood": 2,
+   "stored": 992,
+   "carried": 254
+  }
+ ]
+}

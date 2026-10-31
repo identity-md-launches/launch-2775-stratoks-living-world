@@ -7,6 +7,8 @@ export const VIEW_VERSION = 1;
 export const LIVING_VERSION = 2; // 2: ruins, crops, signals, goal/communication evidence in the inspector
 import { confidence } from './agency.js';
 import { GLYPHS } from './capabilities.js';
+import { aggregatePiles, pileSizeClass, STOCKPILE_VERSION } from '../../../shared/stockpiles.js';
+import { CHAINS_VERSION } from './chains.js';
 const MAX_W = 96, MAX_H = 96;
 
 export function viewport(e, x0, y0, w, h) {
@@ -36,7 +38,9 @@ export function viewport(e, x0, y0, w, h) {
     // Unfinished construction: actual stage, delivered materials, required materials and labour.
     sites: e.shelters.filter((s) => inView(s) && s.complete === false).map((s) => ({ id: s.id, x: s.x, y: s.y, kind: s.kind, stage: s.stage, materials: { ...s.materials }, need: { ...s.need }, work: s.work, workNeed: s.workNeed })),
     // Ground piles (material stock areas) and shelter stores, with exact contents.
-    piles: pilesIn(e, x0, y0, w, h),
+    piles: pilesIn(e, x0, y0, w, h).map((p) => ({ ...p, size: pileSizeClass(Object.values(p.items).reduce((t, n) => t + n, 0)) })),
+    // Zoom-out aggregation (4-tile cells) with exact item totals and member ids; see shared/stockpiles.js.
+    pileClusters: { v: STOCKPILE_VERSION, cell: 4, clusters: aggregatePiles(pilesIn(e, x0, y0, w, h), 4) },
     stores: e.shelters.filter((s) => inView(s) && s.complete !== false && units(s.store) > 0).map((s) => ({ shelter: s.id, x: s.x, y: s.y, items: { ...s.store }, ...(s.integrity <= 0 ? { ruined: true } : {}) })),
     living: LIVING_VERSION };
 }
@@ -58,6 +62,9 @@ export function inspect(e, id) {
     knownStores: (m.shelters ?? []).map((s) => ({ id: s.id, x: s.x, y: s.y, stock: s.stock ?? null, visited: s.visited ?? null, staleTicks: s.visited ? e.tick - s.visited : null, ruined: !!s.ruined, integrity: s.integrity ?? null })),
     goals: { active: (m.goals ?? []).map((g) => ({ id: g.id, kind: g.kind, status: g.status, urgency: g.urgency, since: g.since, steps: g.steps, interruptions: g.interruptions, resumed: g.resumed, avoiding: g.avoid })), history: m.goalHistory ?? [], stats: m.goalStats ?? {},
       learned: Object.entries(m.goalModel ?? {}).sort((a, b) => b[1].n - a[1].n).slice(0, 8).map(([k, v]) => ({ goalStep: k, n: v.n, meanProgress: v.gain })) },
+    // Decision evidence (actual needs, perception counts, demand, scored alternatives) and connected activity chains.
+    decisions: m.decisions ?? [], chains: { v: CHAINS_VERSION, materialsInHand: Object.values(m.prov ?? {}), food: m.food ?? null, search: m.search ?? null, completed: m.chainStats ?? null,
+      toolWear: Object.fromEntries(Object.entries(c.toolWear ?? {}).map(([k, n]) => [k, { used: n, uses: e.toolUses(k) }])) },
     communication: { label: 'limited learned signalling: neutral glyphs, associations from local co-occurrence and outcomes; no dictionary',
       heard: m.heard ?? [], sent: m.sent ?? [], trust: c.trust ?? {},
       associations: Object.entries(m.signals ?? {}).map(([g, a]) => ({ glyph: g, heard: a.heard, responded: a.responded, outcomes: a.n, meanPayoff: a.payoff, confidence: confidence(a), cooccurred: a.seen })),
@@ -75,6 +82,15 @@ function pilesIn(e, x0, y0, w, h) {
   return out;
 }
 export { NODE_KINDS };
+// Real state-derived chain stage for a resident (never a fabricated thought): what it is doing within a chain.
+function chainStage(c) {
+  const m = c.mind, a = c.act;
+  if (m.search) return { kind: 'explore', stage: m.search.found ? 'return' : 'search', item: m.search.item };
+  if (a && ['build', 'repair', 'mend'].includes(a.prim)) return { kind: 'materials', stage: 'use', item: a.item ?? null };
+  if (a && (a.prim === 'carry' || a.prim === 'deposit' || a.prim === 'retrieve') && !a.help) return { kind: 'materials', stage: a.prim === 'deposit' ? 'store' : 'transport', item: a.item ?? null };
+  if (m.food) return { kind: 'food', stage: a?.prim === 'cook' ? 'prepare' : a?.prim === 'share' || a?.help !== undefined ? 'share' : 'hold', item: m.food.item };
+  return null;
+}
 
 // One synchronous read: the viewport, roster and inspector all describe the same authoritative tick.
 // The observer's global roster is never passed back into an agent's decision/perception interfaces.
@@ -86,8 +102,9 @@ export function frame(e, { x = 0, y = 0, w = 48, h = 32, creature = null } = {})
   y = Math.max(bounds.y0, Math.min(bounds.y1 - h, finite(y, 0)));
   const view = viewport(e, x, y, w, h);
   return { worldId: e.id ?? null, v: VIEW_VERSION, tick: e.tick, seed: e.seed, mode: e.mode, bounds, summary: e.summary(), view, minimap: minimap(e),
-    residents: e.creatures.map((c) => { const a = e.activity(c); return { id: c.id, name: c.name, x: c.x, y: c.y, health: Math.round(c.health), action: c.act?.prim ?? null, state: a.state, phase: a.phase, progress: a.progress, load: a.load, carrying: a.carrying, tools: a.tools, target: a.target, item: a.item, helping: a.helping, glyph: a.glyph }; }),
+    residents: e.creatures.map((c) => { const a = e.activity(c); return { id: c.id, name: c.name, x: c.x, y: c.y, health: Math.round(c.health), action: c.act?.prim ?? null, state: a.state, phase: a.phase, progress: a.progress, load: a.load, carrying: a.carrying, tools: a.tools, target: a.target, item: a.item, helping: a.helping, glyph: a.glyph, goal: c.plan?.goal?.kind ?? null, chain: chainStage(c) }; }),
     inspector: creature === null ? null : inspect(e, creature),
+    chains: { totals: e.totals.chains ?? null, replans: e.totals.replans ?? {}, recent: (e.chainLog ?? []).slice(-40) },
     discoveries: e.discoveries.slice(-200), social: e.social.slice(-100),
     // Observer navigation only; never part of an agent's observation or memory.
     places: e.shelters.map(s => ({ id: s.id, x: s.x, y: s.y, biome: s.biome ?? e.biome(s.x,s.y), kind: s.kind, complete: s.complete !== false, ruined: s.complete !== false && s.integrity <= 0, integrity: Math.round(s.integrity), stored: units(s.store) })),

@@ -1,0 +1,248 @@
+{
+ "engine": "base d0ee752 (worktree)",
+ "source": {
+  "seed": 13,
+  "count": 40
+ },
+ "ticks": 5000,
+ "startTick": 0,
+ "endTick": 5000,
+ "start": {
+  "tick": 0,
+  "population": 40,
+  "piles": 0,
+  "pileUnits": 0,
+  "pileWood": 0,
+  "stored": 0,
+  "storedWood": 0,
+  "carried": 0
+ },
+ "end": {
+  "tick": 5000,
+  "population": 87,
+  "piles": 568,
+  "pileUnits": 1037,
+  "pileWood": 732,
+  "stored": 517,
+  "storedWood": 249,
+  "carried": 173,
+  "pileItems": {
+   "wood": 732,
+   "stick": 156,
+   "fiber": 131,
+   "bundle": 9,
+   "stone": 5,
+   "berry": 3,
+   "flint": 1
+  }
+ },
+ "growthPer1000": {
+  "piles": 113.6,
+  "pileUnits": 207.4,
+  "pileWood": 146.4
+ },
+ "produced": {
+  "gathered": {
+   "berry": 1898,
+   "wood": 1188,
+   "stone": 297,
+   "stick": 332,
+   "flint": 27,
+   "lichen": 19,
+   "fiber": 200,
+   "cactus_fruit": 28,
+   "shellfish": 73,
+   "fish": 7
+  },
+  "crafted": {
+   "stone_club": 56,
+   "hand_axe": 5,
+   "bundle": 16,
+   "fish_line": 5
+  }
+ },
+ "consumed": {
+  "built": {
+   "wood": 158,
+   "stone": 77,
+   "fiber": 5
+  },
+  "repaired": {
+   "wood": 1
+  },
+  "burned": {
+   "wood": 5,
+   "bundle": 1,
+   "stick": 5,
+   "fiber": 2
+  },
+  "wornOut": {
+   "fish_line": 3
+  },
+  "mendUsed": {},
+  "craftUsed": {
+   "stick": 77,
+   "stone": 56,
+   "flint": 5,
+   "fiber": 21,
+   "bundle": 5
+  },
+  "eaten": {
+   "berry": 1910,
+   "lichen": 19,
+   "cactus_fruit": 28,
+   "shellfish": 71,
+   "fish": 7
+  }
+ },
+ "movement": {
+  "placed": {},
+  "hauled": {},
+  "deposited": {
+   "wood": 482,
+   "berry": 233,
+   "stone": 260,
+   "stick": 81,
+   "fiber": 47,
+   "cactus_fruit": 7,
+   "flint": 20,
+   "shellfish": 13,
+   "lichen": 3,
+   "fish": 1
+  },
+  "retrieved": {
+   "berry": 232,
+   "wood": 233,
+   "stone": 128,
+   "cactus_fruit": 7,
+   "shellfish": 11,
+   "fiber": 15,
+   "lichen": 3,
+   "fish": 1
+  }
+ },
+ "gatherDemand": null,
+ "chains": null,
+ "chainDurations": null,
+ "chainExamples": null,
+ "replans": null,
+ "births": 50,
+ "deaths": 3,
+ "deathsByCause": {
+  "burns": 2,
+  "starvation": 1
+ },
+ "ledger": {
+  "ok": true,
+  "bad": []
+ },
+ "perf": {
+  "msPerTickMean": 6.12,
+  "p50": 5.06,
+  "p95": 14.77,
+  "max": 110.51,
+  "rssMB": 319,
+  "heapMB": 84
+ },
+ "series": [
+  {
+   "tick": 0,
+   "population": 40,
+   "piles": 0,
+   "pileUnits": 0,
+   "pileWood": 0,
+   "stored": 0,
+   "carried": 0
+  },
+  {
+   "tick": 500,
+   "population": 40,
+   "piles": 42,
+   "pileUnits": 54,
+   "pileWood": 49,
+   "stored": 82,
+   "carried": 54
+  },
+  {
+   "tick": 1000,
+   "population": 42,
+   "piles": 111,
+   "pileUnits": 161,
+   "pileWood": 114,
+   "stored": 108,
+   "carried": 84
+  },
+  {
+   "tick": 1500,
+   "population": 43,
+   "piles": 176,
+   "pileUnits": 264,
+   "pileWood": 179,
+   "stored": 140,
+   "carried": 75
+  },
+  {
+   "tick": 2000,
+   "population": 48,
+   "piles": 229,
+   "pileUnits": 352,
+   "pileWood": 230,
+   "stored": 176,
+   "carried": 69
+  },
+  {
+   "tick": 2500,
+   "population": 56,
+   "piles": 259,
+   "pileUnits": 418,
+   "pileWood": 279,
+   "stored": 210,
+   "carried": 102
+  },
+  {
+   "tick": 3000,
+   "population": 60,
+   "piles": 302,
+   "pileUnits": 506,
+   "pileWood": 344,
+   "stored": 285,
+   "carried": 92
+  },
+  {
+   "tick": 3500,
+   "population": 66,
+   "piles": 361,
+   "pileUnits": 599,
+   "pileWood": 416,
+   "stored": 349,
+   "carried": 110
+  },
+  {
+   "tick": 4000,
+   "population": 77,
+   "piles": 412,
+   "pileUnits": 734,
+   "pileWood": 511,
+   "stored": 384,
+   "carried": 135
+  },
+  {
+   "tick": 4500,
+   "population": 80,
+   "piles": 503,
+   "pileUnits": 878,
+   "pileWood": 613,
+   "stored": 468,
+   "carried": 156
+  },
+  {
+   "tick": 5000,
+   "population": 87,
+   "piles": 568,
+   "pileUnits": 1037,
+   "pileWood": 732,
+   "stored": 517,
+   "carried": 173
+  }
+ ]
+}

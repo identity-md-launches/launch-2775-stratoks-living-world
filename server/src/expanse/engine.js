@@ -9,6 +9,7 @@ import { CHUNK, BASE, T, MOVE_COST, FRESH, SALT, NODE_KINDS, CLIMATE, generateCh
 import { createMind, recordEpisode, modelKey, updateModel, predict, plan, rememberNode, rememberWater, rememberShelter, markVisited, LIMITS, MEMORY_VERSION, OBSERVATION_VERSION, PLANNER_VERSION } from './agent.js';
 import { COOKING, COOK, CROPS, CROP, cropTemp, GLYPHS, cap } from './capabilities.js';
 import { ensureAgency, updateGoals, goalBias, learnGoal, goalMetric, perceiveSignal, association, noteCooccurrence, trustBucket, updateTrust, salientCategory, SIGNAL } from './agency.js';
+import { ensureChains, ensureWorldChains, materialDemand, toolWearFrac, foodStock, knowsSource, recordDecision, onStep, startSearch, trackSearch, settledSearch, noteReplan, MEND, CHAIN_LIMITS } from './chains.js';
 
 export const EXPANSE_SCHEMA = 5;
 export const MODES = ['full', 'frozen', 'no-planner'];
@@ -17,7 +18,7 @@ export const MODES = ['full', 'frozen', 'no-planner'];
 export const RECIPES = { 'flint+stick': 'hand_axe', 'stick+stone': 'stone_club', 'fiber+stick': 'bundle', 'bundle+fiber': 'fish_line' };
 export const FOOD = { berry: { hunger: 20 }, shellfish: { hunger: 26 }, cactus_fruit: { hunger: 10, thirst: 22 }, lichen: { hunger: 8 }, fish: { hunger: 30 }, cooked_fish: { hunger: 44 }, cooked_shellfish: { hunger: 36 }, cooked_lichen: { hunger: 16 } };
 // Schema 4 designed rules (documented in server/docs/LIVING.md). Tools wear out after `uses` attempts.
-export const TOOLS = { fish_line: { uses: 6, for: 'fish' } };
+export const TOOLS = { fish_line: { uses: 6, for: 'fish' }, hand_axe: { uses: 40, for: 'gather' }, stone_club: { uses: 20, for: 'attack' } };
 // Shelters are biome-specific designs with explicit material needs, labour (ticks of work) and decay per tick.
 export const STRUCTURES = {
   temperate: { kind: 'timber_home', need: { wood: 4, stone: 2 }, work: 30, decay: 0.005 },
@@ -67,7 +68,7 @@ export class Expanse {
     this.graveyard = (s.graveyard ?? []).slice(-this.cfg.graveyardMax);
     this.nextId = { creature: s.nextId?.creature ?? 1, fire: 1, shelter: 1, pile: 1, plan: 1, crop: 1, signal: 1 }; this.crops = []; this.signals = [];
     this.totals = { births: 0, deaths: 0, deathsByCause: {}, gathered: {}, regrown: {}, eaten: {}, burnedNodes: {}, burnedItems: {}, built: {}, crafted: {}, craftUsed: {}, repaired: {}, wornOut: {}, deposited: {}, retrieved: {}, ...schema5Totals(), decisions: 0, deferred: 0, planned: 0, reflex: 0, ...(s.legacyTotals ? { legacy: s.legacyTotals } : {}) };
-    this.weather = { rain: false, until: 0 };
+    this.weather = { rain: false, until: 0 }; this.chainLog = []; ensureWorldChains(this);
     for (const sh of s.shelters ?? []) if (sh.complete || sh.stage === 3 || sh.done) this.shelters.push(prebuiltShelter({ id: this.nextId.shelter++, x: sh.x, y: sh.y, cap: 4, integrity: sh.integrity ?? 100, legacyId: sh.id }, this.biome(sh.x, sh.y)));
     this.creatures = (s.creatures ?? []).map((c) => this.adoptCreature(c));
     this.emit('expanse_created', { seed, chunks: this.extentChunks(), note: 'Phase 2B extension around the preserved 56x56 settlement' });
@@ -81,7 +82,7 @@ export class Expanse {
     c.home ??= { x: Math.round(c.x), y: Math.round(c.y) }; c.x = Math.round(c.x); c.y = Math.round(c.y);
     c.lifespan ??= this.cfg.lifespanBase; c.cooldown ??= 0; c.stats ??= {}; c.stats.moved ??= 0; c.carrying = null; c.toolWear ??= {}; c.fromStore ??= {};
     if (c.inside !== undefined) delete c.inside;
-    ensureAgency(c); c.mind.homes ??= {};
+    ensureAgency(c); c.mind.homes ??= {}; ensureChains(c);
     ensureMushroom(c.brain, this.seed, c.id);
     return c;
   }
@@ -189,6 +190,17 @@ export class Expanse {
   addItem(c, item, n = 1) { c.inventory[item] = (c.inventory[item] ?? 0) + n; }
   takeItem(c, item, n = 1) { if ((c.inventory[item] ?? 0) < n) return false; c.inventory[item] -= n; if (!c.inventory[item]) delete c.inventory[item]; return true; }
   isAdult(c) { return c.age >= this.cfg.adultAge; }
+  isFood(k) { return FOOD[k] !== undefined; }
+  toolUses(tool) { return TOOLS[tool]?.uses ?? 0; }
+  structureNeed(x, y) { return STRUCTURES[this.biome(x, y)]?.need ?? {}; }
+  // Fire demand the resident itself feels: cold, or raw heatable food in hand while hungry.
+  fireDemand(c, obs) { return c.warmth < 70 || obs.self.temp < 8 || (c.hunger > 40 && Object.keys(c.inventory).some((k) => c.inventory[k] > 0 && cap(k, 'heatable'))); }
+  // Wear one use of a held tool; at its limit it is used up (accounted as wornOut).
+  wearTool(c, tool) {
+    if (!c.inventory[tool] || !TOOLS[tool]) return;
+    c.toolWear[tool] = (c.toolWear[tool] ?? 0) + 1;
+    if (c.toolWear[tool] >= TOOLS[tool].uses) { this.takeItem(c, tool); c.toolWear[tool] = 0; this.totals.wornOut[tool] = (this.totals.wornOut[tool] ?? 0) + 1; this.emit('tool_worn', { by: c.id, tool }); }
+  }
 
   // ---------------- perception & observation (interface v2) ----------------
   perceive(c) {
@@ -244,7 +256,7 @@ export class Expanse {
   // ---------------- affordances (interface v2) ----------------
   // Generic: every visible/known node can be gathered/inspected, any two held item kinds can be combined, any held
   // item can be used on self, a nearby fire or a pile, or placed. No recipe or ignition rule is consulted here.
-  affordances(c, obs) {
+  affordances(c, obs, demand = materialDemand(this, c, obs)) {
     const ctxTool = c.inventory.hand_axe ? 'tool' : 'bare';
     const nearest = new Map();
     for (const [id, k] of Object.entries(c.mind.known)) {
@@ -269,12 +281,26 @@ export class Expanse {
       if (water) out.push({ prim: 'use', item: null, on: 'water', x: water.x, y: water.y, key: modelKey('drink', 'known-fresh'), label: 'EAT' });
       if (obs.saltWater && !prev) out.push({ prim: 'use', item: null, on: 'water', x: obs.saltWater.x, y: obs.saltWater.y, key: modelKey('drink', 'sea'), label: 'EAT', firstOnly: true });
       if (c.energy >= 1) for (let i = 0; i < held.length; i++) for (let j = i + 1; j < held.length; j++) out.push({ prim: 'combine', a: held[i], b: held[j], key: modelKey('combine', `${held[i]}+${held[j]}`), consumes: [], label: 'GATHER_WOOD' });
+      // Placing fuel is offered only with a felt fire demand (cold, raw food while hungry) or onto an existing pile,
+      // and onto a perceived pile within 2 tiles when there is one, so fuel is consolidated instead of scattered.
+      const fireWanted = this.fireDemand(c, obs), pileNear = pileHere ?? obs.piles.filter((p) => !this.shelters.some((s) => s.x === p.x && s.y === p.y)).sort((a, b) => Math.max(Math.abs(a.x - c.x), Math.abs(a.y - c.y)) - Math.max(Math.abs(b.x - c.x), Math.abs(b.y - c.y)) || (a.id < b.id ? -1 : 1))[0];
       for (const it of held) {
-        if (FUEL[it]) out.push({ prim: 'place', item: it, key: modelKey('place', it, pileHere ? 'pile' : 'ground'), consumes: [it], label: 'GATHER_WOOD' });
+        if (FUEL[it] && (fireWanted || pileHere)) out.push({ prim: 'place', item: it, ...(pileNear && !pileHere ? { x: pileNear.x, y: pileNear.y } : {}), key: modelKey('place', it, pileNear ? 'pile' : 'ground'), consumes: [it], label: 'GATHER_WOOD' });
         if (c.energy >= 1.5 && (prev?.prim === 'place' || pileHere)) out.push({ prim: 'use', item: it, on: 'pile', key: modelKey('use', `${it}@pile`), consumes: [it], label: 'GATHER_WOOD' });
         if (fireNear && c.energy >= 1) out.push({ prim: 'use', item: it, on: 'fire', fire: fireNear.id, x: fireNear.x, y: fireNear.y, key: modelKey('use', `${it}@fire`), consumes: [it], label: 'GATHER_WOOD' });
       }
       if (pileHere && !full && !prev) for (const it of Object.keys(pileHere.items).slice(0, 3)) out.push({ prim: 'carry', item: it, key: modelKey('carry', it), label: 'GATHER_WOOD' });
+      // Hauling: pick up a perceived ground pile nearby when its material has a visible use or a known store has room.
+      if (!pileHere && !full && !prev) {
+        const room = (c.mind.shelters ?? []).some((s) => s.complete !== false && !s.ruined && (s.integrity ?? 100) > 0 && (!s.stock || sum(s.stock) < this.cfg.storeCapacity));
+        for (const p of obs.piles) {
+          const it = Object.keys(p.items).filter((k) => p.items[k] > 0 && (demand.has(k) || (room && STORABLE.has(k)))).sort((a, b) => (demand.has(b) ? 1 : 0) - (demand.has(a) ? 1 : 0) || (a < b ? -1 : 1))[0];
+          if (it) { out.push({ prim: 'carry', item: it, x: p.x, y: p.y, haul: true, key: modelKey('carry', it, demand.has(it) ? 'needed' : 'haul'), label: 'GATHER_WOOD' }); break; }
+        }
+      }
+      // Tool upkeep: mend a worn held tool with its designed material.
+      if (c.energy >= 1) for (const [tool, rule] of Object.entries(MEND)) if ((inv[tool] ?? 0) > 0 && (inv[rule.item] ?? 0) > 0 && (c.toolWear?.[tool] ?? 0) > 0)
+        out.push({ prim: 'mend', tool, item: rule.item, key: modelKey('mend', tool), consumes: [rule.item], label: 'GATHER_STONE' });
       this.livingAffordances(c, obs, inv, prev, out, full);
       if (!prev) {
         const shelterHere = obs.shelters.some((s) => s.x === c.x && s.y === c.y && s.complete && !s.ruined);
@@ -282,7 +308,12 @@ export class Expanse {
         const sh = this.nearestKnownShelter(c);
         if (sh && (sh.x !== c.x || sh.y !== c.y)) out.push({ prim: 'move', x: sh.x, y: sh.y, purpose: 'shelter', key: modelKey('move', 'to-shelter', obs.ambient.rain ? 'rain' : ''), label: 'REST' });
         out.push({ prim: 'move', purpose: 'explore', key: modelKey('move', 'explore', obs.ambient.biome), label: 'WANDER' });
-        if (Math.max(Math.abs(c.home.x - c.x), Math.abs(c.home.y - c.y)) > 12) out.push({ prim: 'move', x: c.home.x, y: c.home.y, purpose: 'home', key: modelKey('move', 'home'), label: 'WANDER' });
+        // Exploring for a needed resource that this resident knows no source of (hungry, or a visible material need).
+        const wantFood = c.hunger > 45 && !knowsSource(c, 'food', NODE_KINDS) && !Object.keys(inv).some((k) => FOOD[k]);
+        const wantMat = [...demand.keys()].find((k) => !(inv[k] > 0) && !knowsSource(c, k, NODE_KINDS));
+        const want = c.mind.search?.item ?? (wantFood ? 'food' : wantMat ?? null);
+        if (want && !c.mind.search?.found) out.push({ prim: 'move', purpose: 'search', item: want, key: modelKey('move', 'search', want === 'food' ? 'food' : 'material'), label: 'WANDER' });
+        if (Math.max(Math.abs(c.home.x - c.x), Math.abs(c.home.y - c.y)) > (c.mind.search?.found ? 3 : 12)) out.push({ prim: 'move', x: c.home.x, y: c.home.y, purpose: 'home', key: modelKey('move', 'home'), label: 'WANDER' });
         for (const n of obs.nodes.slice(0, 3)) if (!c.mind.model[modelKey('inspect', n.kind)]) out.push({ prim: 'inspect', node: n.id, kind: n.kind, x: n.x, y: n.y, key: modelKey('inspect', n.kind), label: 'WANDER' });
         for (const o of obs.creatures.slice(0, 3)) this.socialAffordances(c, o, inv, out);
         if (this.cfg.communication) this.signalAffordances(c, obs, out);
@@ -374,7 +405,8 @@ export class Expanse {
     if (fire && c.energy >= 1) for (const it of Object.keys(inv).filter((k) => inv[k] > 0 && cap(k, 'heatable')).sort().slice(0, 2))
       out.push({ prim: 'cook', item: it, fire: fire.id, x: fire.x, y: fire.y, key: modelKey('cook', it), consumes: [it], label: 'EAT' });
     // Shared stores at known shelters: deposit carried goods; retrieve what this creature last SAW stored.
-    const home = this.nearestKnownShelter(c);
+    // Storage-aware: a store this resident last saw full is not offered for deposits.
+    const home = this.nearestKnownShelter(c, (s) => !s.stock || sum(s.stock) < this.cfg.storeCapacity);
     if (home) {
       const goods = Object.keys(inv).filter((k) => inv[k] > 0 && STORABLE.has(k)).sort((a, b) => inv[b] - inv[a] || (a < b ? -1 : 1)).slice(0, 2);
       for (const it of goods) out.push({ prim: 'deposit', shelter: home.id, x: home.x, y: home.y, item: it, key: modelKey('deposit', FOOD[it] ? 'food' : 'material'), consumes: Array(inv[it]).fill(it), label: 'GATHER_WOOD' });
@@ -392,11 +424,12 @@ export class Expanse {
   // ---------------- decision ----------------
   wellbeing(c) { return -(c.hunger + c.thirst) / 25 + Math.min(c.warmth, 80) / 25 + c.health / 20 + c.energy / 100; }
   decide(c) {
-    const obs = this.perceive(c), f = this.features(c, obs), cues = this.cues(c, obs);
+    const obs = this.perceive(c), f = this.features(c, obs), cues = this.cues(c, obs), demand = materialDemand(this, c, obs);
+    if (trackSearch(this, c, obs, NODE_KINDS) === 'found') this.totals.replans.found = (this.totals.replans.found ?? 0) + 1;
     const goal = this.cfg.goals ? updateGoals(c, this.tick, this.danger(c)) : null;
     const mb = ensureMushroom(c.brain, this.seed, c.id), b = this.bounds();
     const trace = encode(mb, { features: f, cues, x: c.x - b.x0, y: c.y - b.y0, width: b.x1 - b.x0, height: b.y1 - b.y0 });
-    const afford = this.affordances(c, obs);
+    const afford = this.affordances(c, obs, demand);
     let reflex = null;
     // Reflexes (designed, labelled source 'reflex'): escape fire; drink/eat when critical and a known source exists.
     if (this.fires.some((f2) => Math.max(Math.abs(f2.x - c.x), Math.abs(f2.y - c.y)) === 0)) reflex = [{ prim: 'move', purpose: 'escape', key: modelKey('move', 'escape'), label: 'FLEE' }];
@@ -416,7 +449,7 @@ export class Expanse {
         // Likewise the positive part of the label's innate drive is scaled by learned success after 3+ experiences, so a
         // hungry creature does not keep choosing a food action it has learned always fails.
         const p0 = s.preds[0], a = s.steps[0].label, conf = p0 && p0.n >= 3 ? Math.max(0.05, p0.success) : 1, base = innateUtility(a, f, c.personality);
-        const innate = (base > 0 ? base * conf : base) + this.needBias(c, s.steps[0]) * (p0 && p0.n >= 1 ? p0.success : 1);
+        const innate = (base > 0 ? base * conf : base) + this.needBias(c, s.steps[0], demand) * (p0 && p0.n >= 1 ? p0.success : 1);
         const pref = mbOn ? readout(mb, a, trace, false) : 0;
         // Persistent goal: learned mean goal progress after this first step (goalModel), and avoidance of strategies
         // that repeatedly failed for this goal, so the resident switches to an alternative instead of looping.
@@ -431,7 +464,15 @@ export class Expanse {
     const pl = { id: this.nextId.plan++, tick: this.tick, source: chosen.source, steps: chosen.steps.map(describe), predicted: chosen.preds.map((p) => ({ reward: r3(p.reward), sigma: r3(p.sigma), success: r3(p.success), duration: r3(p.duration), n: r3(p.n) })),
       value: r3(chosen.value ?? 0), utility: r3(chosen.u ?? 0), mbPreference: r3(chosen.pref ?? 0), alternatives: cands ? cands.length : 0, actual: [], plannerVersion: PLANNER_VERSION, trace, raw: chosen.steps, idx: 0,
       goal: goal ? { id: goal.id, kind: goal.kind, urgency: goal.urgency, bias: r3(chosen.gb ?? 0), start: goalMetric(goal.kind, c), avoided: goal.avoid.slice() } : null };
+    pl.demand = [...demand.keys()]; pl.fire = this.fireDemand(c, obs);
     c.plan = pl;
+    // Decision evidence: actual needs, perception counts, demand, stocks and the best scored alternatives.
+    const fs = foodStock(c, (k) => FOOD[k] !== undefined);
+    recordDecision(c, { tick: this.tick, plan: pl.id, source: chosen.source, goal: goal?.kind ?? null, chosen: chosen.steps.map((s) => s.key), utility: r3(chosen.u ?? 0),
+      alternatives: cands ? cands.filter((q) => q.seq !== pick0(cands, chosen)).sort((a, b) => b.u - a.u).slice(0, CHAIN_LIMITS.alternatives).map((q) => ({ key: q.seq.steps.map((s) => s.key).join(' > '), u: r3(q.u) })) : [],
+      needs: { hunger: Math.round(c.hunger), thirst: Math.round(c.thirst), energy: Math.round(c.energy), warmth: Math.round(c.warmth), health: Math.round(c.health) },
+      perceived: { nodes: obs.nodes.length, piles: obs.piles.length, shelters: obs.shelters.length, residents: obs.creatures.length, fires: obs.fires.length },
+      demand: Object.fromEntries(demand), food: fs, search: c.mind.search ? { item: c.mind.search.item, found: !!c.mind.search.found } : null });
     this.startStep(c);
   }
   // Danger the resident itself perceives: standing in/next to fire, a recent attacker or threat in sight.
@@ -449,11 +490,31 @@ export class Expanse {
     if (this.danger(c) && g !== 'safety' && c.act.purpose !== 'escape' && c.act.purpose !== 'flee') { this.interrupt(c, 'danger'); return true; }
     if (c.thirst > 85 && g !== 'water' && c.act.prim !== 'use' && c.mind.water.length) { this.interrupt(c, 'thirst'); return true; }
     if (c.hunger > 85 && g !== 'food' && !['use', 'gather', 'harvest', 'retrieve', 'cook'].includes(c.act.prim)) { this.interrupt(c, 'hunger'); return true; }
+    // Changed conditions: the repair target was fixed by someone else, the site finished, or a search found its resource.
+    const a = c.act;
+    if (a.prim === 'repair' && a.phase === 'travel') { const s = this.shelters.find((q) => q.id === a.shelter); if (s && s.integrity >= 95) { this.interrupt(c, 'repair-done'); return true; } }
+    if (a.prim === 'build' && a.site !== undefined && a.phase === 'travel') { const s = this.shelters.find((q) => q.id === a.site); if (s?.complete) { this.interrupt(c, 'site-finished'); return true; } }
+    if (a.prim === 'move' && a.purpose === 'search' && c.mind.search?.found) { this.interrupt(c, 'found'); return true; }
     return false;
   }
   // Designed homeostatic bias so drives are coupled to needs regardless of learning (documented heuristic).
-  needBias(c, s) {
+  needBias(c, s, demand = null) {
     if (s.key.startsWith('drink|')) return c.thirst / 30 - 1;
+    if (demand) {
+      const item = s.prim === 'gather' ? NODE_KINDS[s.kind]?.item : s.item;
+      if (s.prim === 'mend') return 0.4 + toolWearFrac(this, c, s.tool);
+      if (s.prim === 'move' && s.purpose === 'search') return s.item === 'food' ? c.hunger / 40 - 0.6 : 0.35;
+      if (s.prim === 'move' && s.purpose === 'home' && c.mind.search?.found) return 0.6;
+      if (s.prim === 'carry' && s.haul) return demand.has(item) ? 0.45 : 0.1;
+      if ((s.prim === 'gather' || s.prim === 'retrieve') && item && !FOOD[item] && STORABLE.has(item)) {
+        if (demand.has(item)) return 0.35 + (1 - c.warmth / 100);
+        if (c.warmth > 70 && !(s.prim === 'gather' && FUEL[item] && this.fireDemand(c, c.lastObs))) return -0.5; // surplus: no visible use
+      }
+      if (s.prim === 'build' || s.prim === 'repair') { const it = (s.consumes ?? []).find((k) => demand.has(k)); if (it) return 0.4 + (1 - c.warmth / 100); }
+      if (s.prim === 'share' && FOOD[s.item]) { const o = c.lastObs?.creatures.find((q) => q.id === s.target); return o?.thin && c.hunger < 50 ? 0.4 : c.hunger > 60 ? -0.4 : 0; }
+      if (s.prim === 'cook' && c.hunger > 30) return c.hunger / 45 - 0.4; // preparing raw food at a perceived fire while hungry
+      if (s.prim === 'deposit' && !s.help && FOOD[s.item]) { const fs = foodStock(c, (k) => FOOD[k] !== undefined); if (c.hunger < 40 && fs.stored !== null && fs.stored < 6) return 0.3; }
+    }
     if (s.prim === 'use' && s.on === 'self') return c.hunger / 30 - 1;
     if (s.prim === 'gather' && FOOD[NODE_KINDS[s.kind]?.item]) return c.hunger / 40 - 0.8;
     if (s.prim === 'rest') return (1 - c.energy / 100) * 2 + (s.key.includes('fire') || s.key.includes('shelter') ? (1 - c.warmth / 100) * 2 : 0) - 0.6;
@@ -469,7 +530,8 @@ export class Expanse {
     const p = c.plan, s = p?.raw[p.idx];
     if (!s) { this.finishPlan(c); return; }
     c.act = { ...s, started: this.tick, before: { wb: this.wellbeing(c), energy: c.energy, inv: { ...c.inventory }, ...(p.goal ? { gm: goalMetric(p.goal.kind, c) } : {}) }, work: 0, path: null };
-    if (s.prim === 'move' && s.purpose === 'explore') { const t = this.exploreTarget(c); c.act.x = t.x; c.act.y = t.y; }
+    if (s.prim === 'move' && (s.purpose === 'explore' || s.purpose === 'search')) { const t = this.exploreTarget(c); c.act.x = t.x; c.act.y = t.y; }
+    if (s.prim === 'move' && s.purpose === 'search') startSearch(this, c, s.item);
     if (s.prim === 'move' && s.purpose === 'escape') { const t = this.freeNeighbor(c, (x, y) => !this.fires.some((f) => f.x === x && f.y === y)); c.act.x = t?.x ?? c.x; c.act.y = t?.y ?? c.y; }
     if (s.prim === 'flee') { const o = this.getCreature(s.from); const dx = Math.sign(c.x - (o?.x ?? c.x)) || 1, dy = Math.sign(c.y - (o?.y ?? c.y)) || 1; c.act.x = c.x + dx * 6; c.act.y = c.y + dy * 6; c.act.prim = 'move'; c.act.purpose = 'flee'; c.act.wasFlee = true; }
   }
@@ -514,10 +576,10 @@ export class Expanse {
     if (target === false) return this.endStep(c, false, 'target-gone');
     if (target) {
       const reach = Math.max(Math.abs(target.x - c.x), Math.abs(target.y - c.y));
-      const need = a.prim === 'move' ? 0 : a.prim === 'threaten' ? 3 : 1;
+      const need = a.prim === 'move' || a.prim === 'place' || a.prim === 'carry' ? 0 : a.prim === 'threaten' ? 3 : 1;
       if (reach > need) {
         if (a.prim === 'move' && a.wasFlee && reach <= 0) return this.endStep(c, true);
-        if (!a.path || a.retarget) { a.path = this.findPath(c.x, c.y, target.x, target.y, a.prim !== 'move'); a.retarget = false; if (!a.path) return this.endStep(c, false, 'no-path'); }
+        if (!a.path || a.retarget) { a.path = this.findPath(c.x, c.y, target.x, target.y, !['move', 'place', 'carry'].includes(a.prim)); a.retarget = false; if (!a.path) return this.endStep(c, false, 'no-path'); }
         if (this.tick - a.started > 400) return this.endStep(c, false, 'too-far');
         a.phase = 'travel';
         return this.walk(c, a);
@@ -543,6 +605,7 @@ export class Expanse {
   actTarget(c, a) {
     switch (a.prim) {
       case 'move': return { x: a.x, y: a.y };
+      case 'place': case 'carry': if (a.x === undefined) return null; if (a.prim === 'carry' && !this.pileAt(a.x, a.y)) return false; return { x: a.x, y: a.y };
       case 'gather': case 'inspect': { const n = this.nodeAt(a.x, a.y); return n && n.id === a.node && !n.dead ? n : false; }
       case 'use': if (a.on === 'water') return { x: a.x, y: a.y }; if (a.on === 'fire') { const f = this.fires.find((q) => q.id === a.fire); return f ?? false; } return null;
       case 'deposit': case 'retrieve': case 'repair': return this.shelters.find((q) => q.id === a.shelter && q.complete !== false) ?? false;
@@ -574,6 +637,7 @@ export class Expanse {
         if (!this.spendEnergy(c, 1.2 * q)) return this.endStep(c, false, 'exhausted');
         target.units -= q; target.t = target.units + q >= NODE_KINDS[target.kind].max ? this.tick : target.t; this.dirty(target.x, target.y);
         this.addItem(c, item, q); this.totals.gathered[item] = (this.totals.gathered[item] ?? 0) + q; c.stats.gathered += q;
+        if (tool) this.wearTool(c, 'hand_axe');
         rememberNode(c.mind, target, this.tick);
         if (NODE_KINDS[target.kind].blocks && target.units === 0) this.emit('node_depleted', { node: target.id });
         return this.endStep(c, true, null, { produced: { [item]: q } });
@@ -595,7 +659,7 @@ export class Expanse {
         if (!this.takeItem(c, a.item)) return this.endStep(c, false, 'missing-item');
         let p = this.pileAt(c.x, c.y);
         if (!p) { const ch = this.chunkAt(c.x, c.y); p = { id: `p${this.nextId.pile++}`, x: c.x, y: c.y, items: {} }; ch.piles.push(p); ch.pileAt.set(c.y * 100000 + c.x, p); }
-        p.items[a.item] = (p.items[a.item] ?? 0) + 1; this.dirty(c.x, c.y);
+        p.items[a.item] = (p.items[a.item] ?? 0) + 1; this.dirty(c.x, c.y); this.totals.placed[a.item] = (this.totals.placed[a.item] ?? 0) + 1;
         return this.endStep(c, true);
       }
       case 'carry': {
@@ -603,11 +667,13 @@ export class Expanse {
         if (!p || !p.items[a.item]) return this.endStep(c, false, 'nothing-there');
         if (this.invWeight(c) + (WEIGHT[a.item] ?? 1) > this.cfg.invCapacity) return this.endStep(c, false, 'inventory-full');
         p.items[a.item]--; if (!p.items[a.item]) delete p.items[a.item]; this.removePileIfEmpty(p); this.addItem(c, a.item); this.dirty(c.x, c.y);
+        if (a.haul) this.totals.hauled[a.item] = (this.totals.hauled[a.item] ?? 0) + 1;
         // Picking a ground item up is a transfer, like retrieve/salvage: no material entered the world,
         // so it earns no acquisition reward and teaches observers nothing. The produced map is still
         // recorded in the outcome model so the planner keeps predicting the inventory change.
         return this.endStep(c, true, null, { transfer: true });
       }
+      case 'mend': return this.performMend(c, a);
       case 'build': return this.performBuild(c, a, target);
       case 'repair': return this.performRepair(c, a, target);
       case 'deposit': return this.performDeposit(c, a, target);
@@ -759,6 +825,7 @@ export class Expanse {
     s.stage = Math.min(2, Math.floor(3 * Math.min(sum(s.materials) / needTotal, s.work / s.workNeed)));
     if (!missingMaterials(s).length && s.work >= s.workNeed) {
       s.complete = true; s.stage = 3; s.integrity = 100; s.done = this.tick;
+      settledSearch(this, c, s);
       rememberShelter(c.mind, s, this.tick, true); c.home = { x: s.x, y: s.y }; c.stats.built++;
       const far = Math.hypot(s.x - BASE / 2, s.y - BASE / 2) > 40;
       this.emit('shelter_built', { shelter: s.id, by: c.id, x: s.x, y: s.y, kind: s.kind, biome: this.biome(s.x, s.y), newSettlement: far });
@@ -767,6 +834,18 @@ export class Expanse {
     }
     this.dirty(s.x, s.y);
     if (a.work >= 60) return this.endStep(c, true, null, { progress: a.gain ?? 0 });
+  }
+  // Tool upkeep (designed rule): 5 ticks, 1 energy and one unit of the tool's material restore half its wear.
+  performMend(c, a) {
+    a.phase = 'mend';
+    if (a.work < 5) return;
+    const rule = MEND[a.tool];
+    if (!rule || !c.inventory[a.tool] || !c.inventory[rule.item]) return this.endStep(c, false, 'missing-item');
+    if (!(c.toolWear[a.tool] > 0)) return this.endStep(c, false, 'not-needed');
+    if (!this.spendEnergy(c, 1)) return this.endStep(c, false, 'exhausted');
+    this.takeItem(c, rule.item); this.totals.mendUsed[rule.item] = (this.totals.mendUsed[rule.item] ?? 0) + 1; this.totals.mended[a.tool] = (this.totals.mended[a.tool] ?? 0) + 1;
+    const before = c.toolWear[a.tool]; c.toolWear[a.tool] = Math.floor(before * (1 - rule.restore));
+    return this.endStep(c, true, null, { progress: (before - c.toolWear[a.tool]) / (TOOLS[a.tool]?.uses ?? 1) });
   }
   performRepair(c, a, s) {
     a.phase = 'repair';
@@ -987,7 +1066,8 @@ export class Expanse {
     const tools = Object.keys(c.inventory).filter((k) => c.inventory[k] > 0 && (TOOLS[k] || k === 'hand_axe' || k === 'stone_club'));
     if (!a) return { state: c.following ? 'follow' : 'idle', prim: null, phase: null, progress: 0, target: null, item: null, load, capacity: this.cfg.invCapacity, carrying, tools };
     const night = this.daylight() < -0.3;
-    let state = { gather: a.kind === 'fish' ? 'fish' : 'gather', rest: night ? 'sleep' : 'rest', build: 'construct', repair: 'repair', deposit: 'store', retrieve: 'store', combine: 'craft', place: 'place', carry: 'gather', inspect: 'inspect', share: 'social', socialize: 'social', follow: 'social', threaten: 'social', attack: 'fight', move: 'travel', plant: 'plant', tend: 'tend', harvest: 'harvest', cook: 'cook', salvage: 'salvage', signal: 'signal' }[a.prim] ?? a.prim;
+    let state = { gather: a.kind === 'fish' ? 'fish' : 'gather', rest: night ? 'sleep' : 'rest', build: 'construct', repair: 'repair', deposit: 'store', retrieve: 'store', combine: 'craft', place: 'place', carry: 'gather', inspect: 'inspect', share: 'social', socialize: 'social', follow: 'social', threaten: 'social', attack: 'fight', move: 'travel', plant: 'plant', tend: 'tend', harvest: 'harvest', cook: 'cook', salvage: 'salvage', signal: 'signal', mend: 'mend' }[a.prim] ?? a.prim;
+    if (a.prim === 'carry' && a.haul) state = 'haul';
     if (a.prim === 'use') state = a.on === 'water' ? 'drink' : a.on === 'self' ? 'eat' : a.on === 'fire' ? 'tend-fire' : 'make-fire';
     // `starting` = step chosen, no movement or work yet. This is checked for every primitive, including build, so a
     // newly chosen build step never reports `idle` (schema-4 defect). Build keeps `construct` only for real
@@ -997,7 +1077,9 @@ export class Expanse {
     else if (a.prim === 'gather' && a.kind === 'fish' && a.phase === 'inspect') state = 'inspect'; // no line: looks, never casts
     else if (a.prim === 'build' && !['deliver', 'construct', 'mark'].includes(a.phase)) state = 'starting';
     if (a.prim === 'move' && a.purpose === 'respond' && state === 'travel') state = 'respond';
-    const dur = { rest: 20, inspect: 1, combine: 4, place: 2, repair: 6, deposit: 2, retrieve: 2, socialize: 8, salvage: 4, plant: CROP.plantTicks, tend: CROP.tendTicks, harvest: CROP.harvestTicks, cook: COOK.ticks, signal: 1, use: a.on === 'water' ? 3 : 2 }[a.prim] ?? (a.prim === 'gather' ? (a.kind === 'fish' ? 12 : c.inventory.hand_axe && TOOL_GATHER.has(a.kind) ? 3 : 6) : 1);
+    if (a.prim === 'move' && a.purpose === 'search' && state === 'travel') state = 'search';
+    if (a.prim === 'move' && a.purpose === 'home' && c.mind.search?.found && state === 'travel') state = 'return';
+    const dur = { rest: 20, inspect: 1, combine: 4, place: 2, repair: 6, deposit: 2, retrieve: 2, socialize: 8, salvage: 4, mend: 5, plant: CROP.plantTicks, tend: CROP.tendTicks, harvest: CROP.harvestTicks, cook: COOK.ticks, signal: 1, use: a.on === 'water' ? 3 : 2 }[a.prim] ?? (a.prim === 'gather' ? (a.kind === 'fish' ? 12 : c.inventory.hand_axe && TOOL_GATHER.has(a.kind) ? 3 : 6) : 1);
     let progress = a.phase === 'travel' || !a.phase ? 0 : Math.min(1, a.work / dur);
     if (a.prim === 'build' && a.site !== undefined) { const s = this.shelters.find((q) => q.id === a.site); if (s) progress = s.complete ? 1 : Math.round(100 * (sum(s.materials) / sum(s.need) + s.work / s.workNeed) / 2) / 100; }
     return { state, prim: a.prim, phase: a.phase ?? null, progress: Math.round(progress * 100) / 100, ...(a.help !== undefined ? { helping: a.help } : {}), ...(a.glyph ? { glyph: a.glyph } : {}), target: a.x !== undefined ? { x: a.x, y: a.y } : null, item: a.item ?? (a.kind ? NODE_KINDS[a.kind]?.item : null) ?? null, load, capacity: this.cfg.invCapacity, carrying, tools };
@@ -1006,6 +1088,7 @@ export class Expanse {
     // Range 1 (reach), energy cost, hit chance, damage; injuries bleed. Death only via the health rule.
     if (!this.spendEnergy(c, 5)) return this.endStep(c, false, 'exhausted');
     const armed = c.inventory.stone_club ? 7 : c.inventory.hand_axe ? 5 : 0;
+    if (c.inventory.stone_club) this.wearTool(c, 'stone_club');
     const hit = this.rng.next() < 0.65 + 0.2 * (c.personality.boldness - target.personality.boldness);
     target.lastAttacker = c.id; target.relationships[c.id] = clamp((target.relationships[c.id] ?? 0) - 0.5, -1, 1);
     let dmg = 0;
@@ -1014,7 +1097,7 @@ export class Expanse {
     if (target.act && target.act.prim !== 'attack') this.interrupt(target, 'attacked');
     return this.endStep(c, hit, hit ? null : 'missed', { social: 0 });
   }
-  interrupt(c, why) { if (c.act) this.endStep(c, false, `interrupted:${why}`); c.plan = null; }
+  interrupt(c, why) { noteReplan(this, c, why); if (c.act) this.endStep(c, false, `interrupted:${why}`); c.plan = null; }
   dropToPile(x, y, item, n = 1) {
     let p = this.pileAt(x, y); const ch = this.chunkAt(x, y);
     if (!p) { p = { id: `p${this.nextId.pile++}`, x, y, items: {} }; ch.piles.push(p); ch.pileAt.set(y * 100000 + x, p); }
@@ -1033,7 +1116,14 @@ export class Expanse {
     c.act = null;
     const duration = this.tick - a.started + 1, energy = a.before.energy - c.energy;
     const produced = {}; for (const [k, n] of Object.entries(c.inventory)) { const d = n - (a.before.inv[k] ?? 0); if (d > 0) produced[k] = d; }
-    const items = extra.transfer ? 0 : Object.values(produced).reduce((s, v) => s + v, 0); // moving goods out of a store is not production
+    const consumed = {}; for (const [k, n] of Object.entries(a.before.inv)) { const d = n - (c.inventory[k] ?? 0); if (d > 0) consumed[k] = d; }
+    // Acquisition drive counts only goods with a use the resident perceives: materials named by its demand at
+    // decision time, food while it is not sated or carries little, and a tool it did not already hold. Surplus
+    // material earns nothing, which removes the self-reinforcing gathering that produced the log carpet.
+    const dem = c.plan?.demand, fed = Object.entries(c.inventory).reduce((t, [k, n]) => t + (FOOD[k] ? n : 0), 0);
+    const useful = (k) => !dem ? true : FOOD[k] ? (c.hunger > 25 || fed <= 3) : TOOLS[k] || RECIPES_OUT.has(k) ? !(a.before.inv[k] > 0) : dem.includes(k) || (FUEL[k] && !!c.plan?.fire);
+    const items = extra.transfer ? 0 : Object.entries(produced).reduce((s, [k, v]) => s + (useful(k) ? v : 0), 0); // moving goods out of a store is not production
+    if (a.prim === 'gather' && success) for (const k of Object.keys(produced)) if (!FOOD[k]) { if (dem?.includes(k)) this.totals.demandGathers++; else this.totals.surplusGathers++; }
     // Reward = change of need-based wellbeing (designed) + small designed drives (acquisition, novelty, social).
     const novelItem = Object.keys(produced).some((k) => !c.mind.seenItems?.includes(k));
     if (novelItem) { c.mind.seenItems ??= []; for (const k of Object.keys(produced)) if (!c.mind.seenItems.includes(k)) c.mind.seenItems.push(k); }
@@ -1047,6 +1137,7 @@ export class Expanse {
       pl.actual.push({ step: pl.idx, success, reason, reward: r3(reward), duration, energy: r3(energy), produced });
     }
     recordEpisode(c.mind, { tick: this.tick, key: a.key, success, reward: r3(reward), duration, produced, reason, x: c.x, y: c.y, novel: novelItem });
+    if (success) onStep(this, c, a, produced, consumed, { stock: foodStock(c, (k) => FOOD[k] !== undefined).stored });
     // Persistent goal: credit the goal progress this step produced to (goal kind, step key); track failing strategies.
     if (pl?.goal && a.before.gm !== undefined) {
       const g = c.mind.goals.find((q) => q.id === pl.goal.id);
@@ -1235,7 +1326,7 @@ export class Expanse {
     return { id: this.id, legacyArchive: this.legacyArchive, kind: 'stratoks-expanse', schema: EXPANSE_SCHEMA, seed: this.seed, cfg: this.cfg, tick: this.tick, seq: this.seq, rng: this.rng.s, mode: this.mode, learning: this.learning,
       base: { tiles: Buffer.from(this.base.tiles).toString('base64'), trees: this.base.trees, stones: this.base.stones, bushes: this.base.bushes },
       chunks, fires: this.fires, shelters: this.shelters, crops: this.crops, signals: this.signals, creatures, graveyard: this.graveyard, events: this.events, social: this.social, discoveries: this.discoveries,
-      history: this.history, totals: this.totals, weather: this.weather, nextId: this.nextId, ...(this.migrations ? { migrations: this.migrations } : {}) };
+      history: this.history, totals: this.totals, weather: this.weather, nextId: this.nextId, chainLog: this.chainLog, ...(this.migrations ? { migrations: this.migrations } : {}) };
   }
   static fromState(s, cfgOverride = {}) {
     if (s.kind !== 'stratoks-expanse') throw new Error('not an expanse snapshot');
@@ -1253,7 +1344,8 @@ export class Expanse {
       e.indexChunk(ch); e.chunks.set(chunkKey(c.cx, c.cy), ch);
     }
     for (const [cx, cy] of st.generated ?? []) e.chunk(cx, cy); // pristine chunks regenerate deterministically
-    for (const c of e.creatures) { c.energy = clamp(c.energy ?? 80, 0, 100); c.mind ??= createMind(); c.mind.shelters ??= []; c.mind.memoryVersion = MEMORY_VERSION; c.toolWear ??= {}; c.fromStore ??= {}; ensureAgency(c); c.mind.homes ??= {}; ensureMushroom(c.brain, e.seed, c.id); }
+    for (const c of e.creatures) { c.energy = clamp(c.energy ?? 80, 0, 100); c.mind ??= createMind(); c.mind.shelters ??= []; c.mind.memoryVersion = MEMORY_VERSION; c.toolWear ??= {}; c.fromStore ??= {}; ensureAgency(c); c.mind.homes ??= {}; ensureChains(c); ensureMushroom(c.brain, e.seed, c.id); }
+    e.chainLog = st.chainLog ?? []; ensureWorldChains(e);
     return e;
   }
 }
@@ -1261,7 +1353,7 @@ export class Expanse {
 // Item ledger: what holdings() must equal for every item, from the totals alone. Salvage/deposit/retrieve/share
 // are transfers and do not appear. Cooking converts raw to cooked 1:1; harvesting creates the crop yield.
 export function expectedHoldings(t) {
-  const plus = [t.gathered, t.crafted, t.harvested, t.cookedOut], minus = [t.craftUsed, t.eaten, t.burnedItems, t.built, t.repaired, t.wornOut, t.planted, t.cookedIn];
+  const plus = [t.gathered, t.crafted, t.harvested, t.cookedOut], minus = [t.craftUsed, t.eaten, t.burnedItems, t.built, t.repaired, t.wornOut, t.planted, t.cookedIn, t.mendUsed];
   const out = {};
   for (const o of plus) for (const [k, v] of Object.entries(o ?? {})) out[k] = (out[k] ?? 0) + v;
   for (const o of minus) for (const [k, v] of Object.entries(o ?? {})) out[k] = (out[k] ?? 0) - v;
@@ -1269,6 +1361,8 @@ export function expectedHoldings(t) {
 }
 // Totals added in schema 5 (conservation terms and evidence counters).
 export function schema5Totals() { return { planted: {}, harvested: {}, withered: {}, cookedIn: {}, cookedOut: {}, salvaged: {}, helped: {}, heatUsed: 0, signals: 0, signalsHeard: 0, signalsMisheard: 0, signalsFeedback: 0, responses: 0, signalCredit: 0 }; }
+const RECIPES_OUT = new Set(Object.values(RECIPES));
+function pick0(cands, chosen) { return cands.find((q) => q.u === chosen.u && q.pref === chosen.pref)?.seq; }
 function usable(s) { return s.complete !== false && s.integrity > 0; }
 // The save format is unchanged. Browser workers restore the exact same snapshot
 // without a Node Buffer polyfill or a replacement simulation.
