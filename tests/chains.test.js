@@ -66,6 +66,7 @@ test('unattended run: bounded ground piles, all three chains complete, decision 
   assert.ok(T.materials.completed > 0, 'materials acquired and used for build/repair/mend');
   assert.ok(Object.keys(T.materials.byUse).some((k) => k.startsWith('repair') || k.startsWith('mend')), 'used for shelter repair or tool mending');
   assert.ok(T.food.completed > 0 && Object.keys(T.food.byOutcome).length >= 2, 'food eaten and shared/stored');
+  assert.ok(T.food.cooked > 0, 'unattended residents acquire raw food, prepare it over a real shared fire, then use it');
   assert.ok(T.explore.started > 0 && T.explore.found > 0 && T.explore.returned + T.explore.settled > 0, 'search found a source and returned/settled');
   for (const ev of e.chainLog) assert.ok(['materials', 'food', 'explore'].includes(ev.kind) && Number.isInteger(ev.resident) && ev.ticks >= 0);
   for (const c of e.creatures) {

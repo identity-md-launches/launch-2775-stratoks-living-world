@@ -154,7 +154,7 @@ test('plant/tend/harvest: soil, climate and water decide growth; yields enter th
 
 test('cooking: heat from a fire converts raw food 1:1, spends fuel, scorches non-cookables and needs enough fuel', () => {
   const e = mk(11), c = e.creatures[0], p = freeSpot(e, 28, 20);
-  stage(e, c, { fish: 2, berry: 1 }); place(e, c, p.x, p.y + 1);
+  stage(e, c, { fish: 2, cactus_fruit: 1 }); place(e, c, p.x, p.y + 1);
   const f = { id: e.nextId.fire++, x: p.x, y: p.y, fuel: 4, lit: e.tick, by: null }; e.fires.push(f);
   // ledger: the fire was not lit by burning items here, so only cooking terms change
   const h0 = e.holdings();
@@ -162,8 +162,8 @@ test('cooking: heat from a fire converts raw food 1:1, spends fuel, scorches non
   let r = run(e, c, { prim: 'cook', item: 'fish', fire: f.id, x: f.x, y: f.y, key: 'cook|fish|' }, 300, (cc) => { if (cc.act) assert.equal(e.activity(cc).state, cc.act.phase ? 'cook' : 'starting'); });
   assert.equal(r.success, true); assert.equal(c.inventory.fish, 1); assert.equal(c.inventory.cooked_fish, 1);
   assert.equal(f.fuel, 4 - COOK.heat); assert.equal(sum(e.holdings()), sum(h0));
-  r = run(e, c, { prim: 'cook', item: 'berry', fire: f.id, x: f.x, y: f.y, key: 'cook|berry|' });
-  assert.equal(r.reason, 'scorched'); assert.equal(c.inventory.berry, 1); assert.equal(f.fuel, 4 - 2 * COOK.heat);
+  r = run(e, c, { prim: 'cook', item: 'cactus_fruit', fire: f.id, x: f.x, y: f.y, key: 'cook|cactus_fruit|' });
+  assert.equal(r.reason, 'scorched'); assert.equal(c.inventory.cactus_fruit, 1); assert.equal(f.fuel, 4 - 2 * COOK.heat);
   f.fuel = 1;
   assert.equal(run(e, c, { prim: 'cook', item: 'fish', fire: f.id, x: f.x, y: f.y, key: 'cook|fish|' }).reason, 'fire-too-low');
   ledgerOk(e, 'cook');

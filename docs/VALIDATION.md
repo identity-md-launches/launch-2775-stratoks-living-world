@@ -1,6 +1,6 @@
 # Validation · Stratoks browser/service integration
 
-**Historical Phase 1/client-repair record.** Current Phase 1.1 integration results, additional fixes and publication limitations are in [`artifacts/phase-1.1/VALIDATION.md`](../artifacts/phase-1.1/VALIDATION.md). Claims and tool versions below describe the earlier run.
+**Historical Phase 1/client-repair record.** The former `artifacts/phase-1.1/` evidence bundle is not included in this tree. Current living-world accounting and activity-chain evidence is in [chains/VALIDATION.md](chains/VALIDATION.md); claims and tool versions below describe the earlier client run.
 
 Date: 26 October 2026. These are reproducible worker-side observations, not independent certification. The assignment’s verifier checks paths and bytes, not behavior.
 
@@ -73,7 +73,7 @@ This work builds on the accepted `server/`, `shared/`, `deploy/` and `tests/` co
 
 The world is a full-viewport Canvas 2D settlement with original yellow creature sprites and HTML observation controls. It has one consistent visual idea: an isometric clearing under quiet cream tools. No externally generated raster scene pretends to be a live world.
 
-Because no production service URL was supplied, static defaults are empty and owner-settable. The demo is **not** a fallback on connection failure. It is an explicit private mode, running the same engine with the default 24-creature seed and 900 computed warm-up ticks. It resets on reload. The shared simulation remains authoritative, persistent and independent of browsers.
+Historical note: the static-default claim above is no longer current. The shipped `dist/expanse-config.json` is configured with an owner deployment URL and `startMode: "live"`; `dist/demo/agency-manifest.json` resumes a schema-5 checkpoint at tick 12,600. The demo remains an explicit mode rather than a connection-failure fallback. The shared simulation remains authoritative, persistent and independent of browsers.
 
 Coinbase Smart Wallet is reachable as a connector; actual smart-account authentication is not supported by the inherited EIP-191-only server. The UI discloses this limitation. No unverified smart-account success or transaction is shown.
 
@@ -204,7 +204,7 @@ This demonstrates learned visitor discrimination in the measured scenario. It do
 
 ## Evidence and delivery boundaries
 
-Screenshots in `docs/screenshots/` are actual production-browser captures: unconfigured 390, running demo desktop/mobile, mobile inspector and phone wallet sheet. The demo screenshot’s pause label is intentional: the integration test pauses at a real computed tick for a stable capture. `web/public/share.png` is also an actual demo capture, copied into the final export. No video was generated or claimed.
+The historical `docs/screenshots/` directory and `web/public/share.png` are not included in this tree. The current share image is [`web/public/share-world.jpg`](../web/public/share-world.jpg), copied to the shipped [`dist/share-world.jpg`](../dist/share-world.jpg). Current living-world evidence and limitations are documented in [chains/VALIDATION.md](chains/VALIDATION.md). No video was generated or claimed.
 
 Raw current evidence: `results/browser-checks.json`, `interface-checks.json`, `taste.json`, server/client/build/typecheck output and six measurement files. Earlier server-only evidence remains under `tests/results/` and is explicitly historical.
 

@@ -58,7 +58,10 @@ test('transient session-check errors retain credentials, deduplicate checks and 
   assert.equal(calls, 1); assert.equal(client.session.token, session.token); assert.equal(client.state, 'unavailable');
   client.fetch = native;
   await client.refreshSession(); assert.equal(calls, 1, 'focus cannot bypass Retry-After');
-  for (let i = 0; client.state !== 'verified' && i < 40; i++) await delay(100);
+  // Use the client's calculated Retry-After deadline, then drive one refresh explicitly.  A fixed polling budget
+  // races the real timer when this test shares an event loop with long simulation tests.
+  await delay(Math.max(0, client.retryAt - Date.now()) + 250);
+  await client.refreshSession({ retryNow: true });
   assert.equal(client.session.token, session.token); assert.equal(client.state, 'verified');
 });
 

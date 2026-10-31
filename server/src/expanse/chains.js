@@ -3,6 +3,8 @@
 // observation and memory, and chains are RECORDED from the steps it actually completed (observer evidence).
 // All state is bounded per resident (CHAIN_LIMITS) and per world (chainLog ring).
 
+import { COOKING } from './capabilities.js';
+
 export const CHAINS_VERSION = 1;
 export const CHAIN_LIMITS = Object.freeze({ decisions: 6, alternatives: 3, provenance: 6, stages: 6, log: 300, searchTicks: 900 });
 const FOOD_KINDS = new Set(['bush', 'cactus', 'shellfish', 'lichen', 'fish']);
@@ -36,6 +38,18 @@ export function materialDemand(e, c, obs) {
   for (const s of c.mind.shelters ?? []) if (s.complete !== false && !s.ruined && (s.integrity ?? 100) < 70 && cheb(s, c) <= 16)
     for (const k of Object.keys(e.structureNeed(s.x, s.y))) add(k, `repair:${s.id}`);
   for (const [tool, rule] of Object.entries(MEND)) if ((c.inventory[tool] ?? 0) > 0 && toolWearFrac(e, c, tool) >= 0.5) add(rule.item, `mend:${tool}`);
+  // A carried raw meal or visible hungry food source, with no perceived fire, is a concrete local reason to seek
+  // the real materials for a fire. This does not create food, fuel, or a fire; a resident still uses all inputs.
+  const rawMeal = Object.keys(c.inventory).some((k) => (c.inventory[k] ?? 0) > 0 && COOKING[k]);
+  const nearbyMeal = obs.nodes.some((n) => ({ bush: 'berry', shellfish: 'shellfish', lichen: 'lichen', fish: 'fish' })[n.kind] && n.units > 0);
+  // A visible meal can also justify preparing the kit before gathering it; this allows a resident to make a
+  // shared fire from its own locally perceived supplies rather than requiring four items to coincide by chance.
+  // Diligence is an existing resident trait, not an assigned role: only residents inclined to prepare ahead retain
+  // a meal long enough to collect a kit. Everyone still keeps the raw-food emergency route.
+  const mealIntent = (c.personality?.diligence ?? 0.5) >= 0.6;
+  if (mealIntent && (rawMeal || (nearbyMeal && c.hunger > 20)) && !obs.fires.length) {
+    add('wood', 'prepare:fire-fuel'); add('flint', 'prepare:fire-light'); add('stone', 'prepare:fire-light');
+  }
   // Already holding enough for the visible need: carrying more is surplus.
   for (const k of [...need.keys()]) if ((c.inventory[k] ?? 0) >= 4) need.delete(k);
   return need;
@@ -97,17 +111,34 @@ export function onStep(e, c, a, produced, consumed, extra = {}) {
   // Food: acquire -> (prepare) -> eat / share / provision, chosen from hunger and local stocks.
   const isFood = (k) => e.isFood(k);
   for (const [k] of Object.entries(produced)) if (isFood(k)) {
-    if (a.prim === 'cook') { if (m.food) { m.food.item = k; m.food.cooked = true; stage(m.food, 'prepare:cook'); } else m.food = { item: k, start: t, stages: ['held', 'prepare:cook'], hunger: Math.round(c.hunger), cooked: true }; }
-    else if (!m.food) m.food = { item: k, start: t, stages: [`acquire:${a.prim}${a.kind === 'fish' ? ':fish' : ''}`], hunger: Math.round(c.hunger), cooked: false, stock: extra.stock ?? null };
+    if (a.prim === 'cook') {
+      // One bounded provenance record represents one meal. A second cooked unit can coexist in inventory, but must
+      // not append a second "prepare" stage to the first meal and turn evidence into a fabricated sequence.
+      if (m.food?.cooked) continue;
+      const raw = m.foodSources?.[a.item] ?? (m.food && !m.food.cooked && m.food.item === a.item ? m.food : null);
+      if (raw) m.food = { ...raw, item: k, cooked: true, stages: [...raw.stages, 'prepare:cook'] };
+      else m.food = { item: k, start: t, stages: ['held', 'prepare:cook'], hunger: Math.round(c.hunger), cooked: true };
+      if (m.foodSources) delete m.foodSources[a.item];
+    }
+    else if (['gather', 'carry', 'retrieve', 'harvest'].includes(a.prim)) {
+      const source = { item: k, start: t, stages: [`acquire:${a.prim}${a.kind === 'fish' ? ':fish' : ''}`], hunger: Math.round(c.hunger), cooked: false, stock: extra.stock ?? null };
+      (m.foodSources ??= {})[k] = source;
+      if (!m.food) m.food = source;
+    }
   }
+  const foodKeys = Object.keys(m.foodSources ?? {}); if (foodKeys.length > CHAIN_LIMITS.provenance) { foodKeys.sort((a, b) => m.foodSources[a].start - m.foodSources[b].start); delete m.foodSources[foodKeys[0]]; }
   const f = m.food;
   if (f) for (const [k] of Object.entries(consumed)) if (isFood(k)) {
+    // A resident can carry a newly gathered raw berry alongside a prepared meal. Only close this provenance when
+    // the consumed item is the one actually tracked, otherwise a raw outcome would be falsely labelled cooked.
+    if (k !== f.item) { if (m.foodSources) delete m.foodSources[k]; continue; }
     const outcome = a.prim === 'use' && a.on === 'self' ? 'eaten' : a.prim === 'share' ? 'shared' : a.prim === 'deposit' && a.help !== undefined ? 'provisioned' : a.prim === 'deposit' ? 'stored' : null;
     if (!outcome) continue;
     const T = e.totals.chains.food;
     T.completed++; T.byOutcome[outcome] = (T.byOutcome[outcome] ?? 0) + 1; T.ticks += t - f.start; if (f.cooked) T.cooked++;
     m.chainStats.food++;
     log(e, { kind: 'food', tick: t, resident: c.id, item: k, outcome, cooked: f.cooked, stages: [...f.stages, outcome], hungerAtStart: f.hunger, hungerNow: Math.round(c.hunger), stockAtStart: f.stock ?? null, recipient: a.target ?? a.help ?? null, ticks: t - f.start });
+    if (m.foodSources) delete m.foodSources[k];
     m.food = null; break;
   }
 }

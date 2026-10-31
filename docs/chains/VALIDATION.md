@@ -48,7 +48,7 @@ worktree of d0ee752):
 Hauled stock goes to stores (stored units at 5000 ticks: 579/683/517 before → 988/992/973 after) and to use
 (build/repair/mend). Store capacity (40/shelter) is unchanged.
 
-Chain frequencies after the change (5000 ticks, 40 residents):
+Historical chain frequencies before this revision (5000 ticks, 40 residents):
 
 | Seed | materials (by use) | food (by outcome) | explore started / found / returned / settled / failed | replans |
 |---|---|---|---|---|
@@ -87,10 +87,28 @@ release; saves made by this version load in the previous release because only ad
 * Frontend typecheck/build, browser frame times and captures were **not** run: no frontend files changed in this
   component, and they belong to the art/interface/integration step.
 
-## 6. Limitations (unresolved)
+## 6. Prepared-food revision (unattended, no injected jobs/items)
 
-* The **prepare (cook)** stage of the food chain was **not observed** in any unattended run (fires are rare; cooked
-  0). The food chain is demonstrated as acquire → eat / share / store, driven by hunger and remembered stocks.
+The earlier zero-cook limitation was reproduced: the ordinary planner ate raw food before a rare flint/fuel/fire
+sequence could complete. The repair preserves raw-food emergency eating, but retains a cookable meal while hunger is
+below 75, explicitly replans after acquiring it, keeps the three real fire inputs together, remembers only seen
+fires, and uses a lower-probability ordinary-stone spark fallback when flint is unavailable. Fuel is still consumed,
+the fire is still hazardous, and cooking remains 1:1 raw-to-prepared accounting. `cooked_berry` is an original
+prepared-food output (28 hunger vs raw berry's 20); cactus fruit remains the non-cookable scorch case.
+
+Focused multi-seed runs from this revision were unattended and ledger-exact. The final two seed runs resumed the exact persisted simulation state at 400-tick intervals (no jobs or inventory injected) to fit the local command wall; this also exercises save/restart determinism. The experiment captures prepared events while the bounded in-world log advances, so evidence is not lost after later events overwrite the 300-entry ring.
+
+| Seed | Tick | cooked total | current prepared-log outcomes | ground piles | ledger |
+|---|---:|---|---:|---|---|
+| 3 | 2,000 | 15 | eaten 10, stored 3, shared 1 | 20 | exact |
+| 7 | 2,000 | 26 | eaten 18, stored 3 | 32 | exact |
+
+Seed 3 includes a real prepared-food sharing event (`held → prepare:cook → shared`) plus independently recorded raw acquisition-to-preparation outcomes such as `acquire:gather → prepare:cook → eaten/stored`; seed 7 independently repeats the acquire/prepare/use and storage outcomes. A resident’s carried-food state and every stage are real simulation state, not authored dialogue. Fires can fail or be interrupted, and raw food remains available at hunger 75, so this is neither a guaranteed job nor a decorative loop. These are simulation observations, not a frame-rate or production-capacity claim.
+
+## 7. Limitations (unresolved)
+
+* The prepared-food chain is now observed, but both fire ignition and cooking can still fail/replan because fuel can
+  be wet, a spark can fail, a remembered fire can extinguish, or hunger can reach the raw-food fallback threshold.
 * Surplus gathering is reduced in reward but still frequent (e.g. demo: 1051 surplus vs 44 demanded material gathers
   in 2000 ticks): learned outcome models from the old reward decay only gradually. The surplus now ends up in stores
   instead of scattered piles.

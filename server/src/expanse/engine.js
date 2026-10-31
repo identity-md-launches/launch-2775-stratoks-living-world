@@ -16,7 +16,7 @@ export const MODES = ['full', 'frozen', 'no-planner'];
 // Designer-defined material rules. Agents are NOT given this table: they only see generic affordances
 // (combine any two held items, use any held item on a target) and learn results from transitions.
 export const RECIPES = { 'flint+stick': 'hand_axe', 'stick+stone': 'stone_club', 'fiber+stick': 'bundle', 'bundle+fiber': 'fish_line' };
-export const FOOD = { berry: { hunger: 20 }, shellfish: { hunger: 26 }, cactus_fruit: { hunger: 10, thirst: 22 }, lichen: { hunger: 8 }, fish: { hunger: 30 }, cooked_fish: { hunger: 44 }, cooked_shellfish: { hunger: 36 }, cooked_lichen: { hunger: 16 } };
+export const FOOD = { berry: { hunger: 20 }, cooked_berry: { hunger: 28 }, shellfish: { hunger: 26 }, cactus_fruit: { hunger: 10, thirst: 22 }, lichen: { hunger: 8 }, fish: { hunger: 30 }, cooked_fish: { hunger: 44 }, cooked_shellfish: { hunger: 36 }, cooked_lichen: { hunger: 16 } };
 // Schema 4 designed rules (documented in server/docs/LIVING.md). Tools wear out after `uses` attempts.
 export const TOOLS = { fish_line: { uses: 6, for: 'fish' }, hand_axe: { uses: 40, for: 'gather' }, stone_club: { uses: 20, for: 'attack' } };
 // Shelters are biome-specific designs with explicit material needs, labour (ticks of work) and decay per tick.
@@ -26,7 +26,7 @@ export const STRUCTURES = {
   cold: { kind: 'snow_refuge', need: { stone: 4, wood: 2 }, work: 36, decay: 0.01 },
   coast: { kind: 'coast_hut', need: { wood: 3, fiber: 2 }, work: 28, decay: 0.008 },
 };
-export const STORABLE = new Set(['berry', 'shellfish', 'cactus_fruit', 'lichen', 'fish', 'wood', 'stone', 'fiber', 'stick', 'flint', 'cooked_fish', 'cooked_shellfish', 'cooked_lichen']);
+export const STORABLE = new Set(['berry', 'cooked_berry', 'shellfish', 'cactus_fruit', 'lichen', 'fish', 'wood', 'stone', 'fiber', 'stick', 'flint', 'cooked_fish', 'cooked_shellfish', 'cooked_lichen']);
 export const FUEL = { wood: 6, stick: 2, fiber: 1, bundle: 4 };
 export const WEIGHT = { wood: 2, stone: 2 };
 const TOOL_GATHER = new Set(['tree', 'deadfall', 'driftwood', 'scrub']);
@@ -193,8 +193,13 @@ export class Expanse {
   isFood(k) { return FOOD[k] !== undefined; }
   toolUses(tool) { return TOOLS[tool]?.uses ?? 0; }
   structureNeed(x, y) { return STRUCTURES[this.biome(x, y)]?.need ?? {}; }
-  // Fire demand the resident itself feels: cold, or raw heatable food in hand while hungry.
-  fireDemand(c, obs) { return c.warmth < 70 || obs.self.temp < 8 || (c.hunger > 40 && Object.keys(c.inventory).some((k) => c.inventory[k] > 0 && cap(k, 'heatable'))); }
+  // Fire demand the resident itself feels: cold, a carried raw meal, or a locally perceived cookable source when
+  // hunger is rising. A fire made from this demand is a shared resource, not a spawned prop.
+  fireDemand(c, obs) {
+    const heldMeal = Object.keys(c.inventory).some((k) => c.inventory[k] > 0 && cap(k, 'heatable'));
+    const nearbyMeal = obs.nodes.some((n) => n.units > 0 && cap(NODE_KINDS[n.kind]?.item, 'heatable'));
+    return c.warmth < 70 || obs.self.temp < 8 || (c.hunger > 5 && heldMeal) || (c.hunger > 20 && nearbyMeal);
+  }
   // Wear one use of a held tool; at its limit it is used up (accounted as wornOut).
   wearTool(c, tool) {
     if (!c.inventory[tool] || !TOOLS[tool]) return;
@@ -219,6 +224,17 @@ export class Expanse {
     if (fresh) rememberWater(m, fresh.x, fresh.y, this.tick);
     const novel = markVisited(m, c.x, c.y);
     const fires = this.fires.filter((f) => Math.abs(f.x - c.x) <= r && Math.abs(f.y - c.y) <= r);
+    // Fires are remembered only after being seen. Keep the field absent until then, preserving older snapshots
+    // byte-for-byte; a later action resolves the id against the world so an extinguished fire replans safely.
+    if (fires.length || m.fires?.length) {
+      m.fires ??= [];
+      for (const f of fires) {
+        const known = m.fires.find((q) => q.id === f.id);
+        if (known) Object.assign(known, { x: f.x, y: f.y, t: this.tick }); else m.fires.push({ id: f.id, x: f.x, y: f.y, t: this.tick });
+      }
+      m.fires = m.fires.filter((f) => Math.abs(f.x - c.x) > r || Math.abs(f.y - c.y) > r || fires.some((q) => q.id === f.id));
+      if (m.fires.length > 6) m.fires.sort((a, b) => b.t - a.t).splice(6);
+    }
     const shelters = this.shelters.filter((s) => Math.abs(s.x - c.x) <= r && Math.abs(s.y - c.y) <= r);
     // Sight records appearance only (finished / ruined / wear); store contents are learned only by visiting.
     for (const s of shelters) if (s.complete !== false) rememberShelter(m, s, this.tick, false);
@@ -270,8 +286,16 @@ export class Expanse {
       const out = [];
       const full = Object.entries(inv).reduce((s, [k, n]) => s + (WEIGHT[k] ?? 1) * n, 0) >= this.cfg.invCapacity;
       const held = Object.keys(inv).filter((k) => inv[k] > 0).sort();
+      const preparingMeal = !obs.fires.length && (c.personality?.diligence ?? 0.5) >= 0.6 && held.some((k) => COOKING[k]);
+      const heldCookable = held.some((k) => cap(k, 'heatable'));
+      const mealInputs = new Set(['wood', 'flint', 'stone']);
       const tool = inv.hand_axe ? 'tool' : ctxTool === 'tool' && inv.hand_axe !== 0 ? 'tool' : 'bare';
-      for (const it of held) if (FOOD[it] !== undefined || it === 'berry') out.push({ prim: 'use', item: it, on: 'self', key: modelKey('use', `${it}@self`), consumes: [it], label: 'EAT' });
+      for (const it of held) if (FOOD[it] !== undefined || it === 'berry') {
+        // Keep a cookable meal while a resident can still deliberately prepare it. At severe hunger the normal
+        // raw-food fallback returns, so unreachable fuel or a failed fire cannot starve the resident.
+        if (preparingMeal && COOKING[it] && c.hunger < 75) continue;
+        out.push({ prim: 'use', item: it, on: 'self', key: modelKey('use', `${it}@self`), consumes: [it], label: 'EAT' });
+      }
       if (!full) for (const n of nearest.values()) {
         const space = Math.floor((this.cfg.invCapacity - Object.entries(inv).reduce((s, [k, q]) => s + (WEIGHT[k] ?? 1) * q, 0)) / (WEIGHT[NODE_KINDS[n.kind]?.item] ?? 1));
         const quantity = Math.min(tool === 'tool' && TOOL_GATHER.has(n.kind) ? 2 : 1, n.units, space);
@@ -280,13 +304,26 @@ export class Expanse {
       }
       if (water) out.push({ prim: 'use', item: null, on: 'water', x: water.x, y: water.y, key: modelKey('drink', 'known-fresh'), label: 'EAT' });
       if (obs.saltWater && !prev) out.push({ prim: 'use', item: null, on: 'water', x: obs.saltWater.x, y: obs.saltWater.y, key: modelKey('drink', 'sea'), label: 'EAT', firstOnly: true });
-      if (c.energy >= 1) for (let i = 0; i < held.length; i++) for (let j = i + 1; j < held.length; j++) out.push({ prim: 'combine', a: held[i], b: held[j], key: modelKey('combine', `${held[i]}+${held[j]}`), consumes: [], label: 'GATHER_WOOD' });
+      if (c.energy >= 1) for (let i = 0; i < held.length; i++) for (let j = i + 1; j < held.length; j++) {
+        // Keep the locally perceived fire inputs together until the resident can attempt the preparation it chose.
+        if (preparingMeal && (mealInputs.has(held[i]) || mealInputs.has(held[j]))) continue;
+        out.push({ prim: 'combine', a: held[i], b: held[j], key: modelKey('combine', `${held[i]}+${held[j]}`), consumes: [], label: 'GATHER_WOOD' });
+      }
       // Placing fuel is offered only with a felt fire demand (cold, raw food while hungry) or onto an existing pile,
       // and onto a perceived pile within 2 tiles when there is one, so fuel is consolidated instead of scattered.
       const fireWanted = this.fireDemand(c, obs), pileNear = pileHere ?? obs.piles.filter((p) => !this.shelters.some((s) => s.x === p.x && s.y === p.y)).sort((a, b) => Math.max(Math.abs(a.x - c.x), Math.abs(a.y - c.y)) - Math.max(Math.abs(b.x - c.x), Math.abs(b.y - c.y)) || (a.id < b.id ? -1 : 1))[0];
+      // Starting a new fire is only offered when this resident can finish the local sequence now. This prevents
+      // hungry residents from scattering a fuel pile they cannot ignite after walking away.
+      // Flint struck on stone is most reliable; an ordinary sharp stone is a slower, less reliable fallback. Both
+      // consume only the fuel placed on the ground, so no material is conjured to bootstrap a settlement fire.
+      const canIgnite = (!!inv.flint && !!inv.stone) || !!inv.stone;
+      const canStartHere = c.warmth < 70 || obs.self.temp < 8 || heldCookable;
       for (const it of held) {
-        if (FUEL[it] && (fireWanted || pileHere)) out.push({ prim: 'place', item: it, ...(pileNear && !pileHere ? { x: pileNear.x, y: pileNear.y } : {}), key: modelKey('place', it, pileNear ? 'pile' : 'ground'), consumes: [it], label: 'GATHER_WOOD' });
-        if (c.energy >= 1.5 && (prev?.prim === 'place' || pileHere)) out.push({ prim: 'use', item: it, on: 'pile', key: modelKey('use', `${it}@pile`), consumes: [it], label: 'GATHER_WOOD' });
+        if (FUEL[it] && ((canStartHere && (pileHere || canIgnite)) || pileHere)) out.push({ prim: 'place', item: it, purpose: fireWanted ? 'prepare-fire' : undefined, ...(pileNear && !pileHere ? { x: pileNear.x, y: pileNear.y } : {}), key: modelKey('place', it, pileNear ? 'pile' : 'ground'), consumes: [it], label: 'GATHER_WOOD' });
+        const striker = (it === 'flint' && inv.stone) || it === 'stone';
+        // When this pile was deliberately made for a needed meal, keep the next attempt to a viable striker;
+        // trying to rub the fuel/food itself on the pile is neither a useful replan nor a cooking demonstration.
+        if (c.energy >= 1.5 && (prev?.prim === 'place' || pileHere) && (!fireWanted || !canIgnite || striker)) out.push({ prim: 'use', item: it, on: 'pile', purpose: striker ? 'prepare-fire' : undefined, key: modelKey('use', `${it}@pile`), consumes: [it], label: 'GATHER_WOOD' });
         if (fireNear && c.energy >= 1) out.push({ prim: 'use', item: it, on: 'fire', fire: fireNear.id, x: fireNear.x, y: fireNear.y, key: modelKey('use', `${it}@fire`), consumes: [it], label: 'GATHER_WOOD' });
       }
       if (pileHere && !full && !prev) for (const it of Object.keys(pileHere.items).slice(0, 3)) out.push({ prim: 'carry', item: it, key: modelKey('carry', it), label: 'GATHER_WOOD' });
@@ -301,7 +338,7 @@ export class Expanse {
       // Tool upkeep: mend a worn held tool with its designed material.
       if (c.energy >= 1) for (const [tool, rule] of Object.entries(MEND)) if ((inv[tool] ?? 0) > 0 && (inv[rule.item] ?? 0) > 0 && (c.toolWear?.[tool] ?? 0) > 0)
         out.push({ prim: 'mend', tool, item: rule.item, key: modelKey('mend', tool), consumes: [rule.item], label: 'GATHER_STONE' });
-      this.livingAffordances(c, obs, inv, prev, out, full);
+      this.livingAffordances(c, obs, inv, prev, out, full, preparingMeal);
       if (!prev) {
         const shelterHere = obs.shelters.some((s) => s.x === c.x && s.y === c.y && s.complete && !s.ruined);
         out.push({ prim: 'rest', key: modelKey('rest', fireNear ? 'fire' : shelterHere ? 'shelter' : 'open', obs.ambient.biome), label: 'REST', x: fireNear?.x, y: fireNear?.y });
@@ -357,7 +394,7 @@ export class Expanse {
   nearestKnownShelter(c, ok = () => true) { let best = null, bd = Infinity; for (const s of c.mind.shelters ?? []) { if (s.complete === false || (s.integrity ?? 100) <= 0 || s.ruined || !ok(s)) continue; const d = Math.max(Math.abs(s.x - c.x), Math.abs(s.y - c.y)); if (d < bd) { bd = d; best = s; } } return best; }
   // Schema 4 affordances. Built only from this creature's observation and memory: perceived sites/shelters, its own
   // remembered (possibly stale) store contents and its inventory. No world lookup decides feasibility here.
-  livingAffordances(c, obs, inv, prev, out, full) {
+  livingAffordances(c, obs, inv, prev, out, full, preparingMeal = false) {
     const held = (k) => (inv[k] ?? 0) > 0, cheb = (p) => Math.max(Math.abs(p.x - c.x), Math.abs(p.y - c.y));
     // Construction: contribute to the nearest perceived unfinished site, or found one here.
     const site = obs.shelters.filter((s) => !s.complete).sort((a, b) => cheb(a) - cheb(b) || a.id - b.id)[0];
@@ -401,14 +438,14 @@ export class Expanse {
     const ripe = obs.crops.filter((q) => q.ripe).sort((a, b) => cheb(a) - cheb(b) || a.id - b.id)[0];
     if (ripe && !full && c.energy >= 1) out.push({ prim: 'harvest', crop: ripe.id, x: ripe.x, y: ripe.y, kind: ripe.kind, key: modelKey('harvest', ripe.kind), label: 'EAT' });
     // Cooking: hold any "heatable" item over a perceived fire. What it turns into is learned, not shown.
-    const fire = obs.fires.slice().sort((a, b) => cheb(a) - cheb(b) || a.id - b.id)[0];
+    const fire = [...obs.fires, ...(c.mind.fires ?? []).filter((q) => !obs.fires.some((f) => f.id === q.id))].sort((a, b) => cheb(a) - cheb(b) || a.id - b.id)[0];
     if (fire && c.energy >= 1) for (const it of Object.keys(inv).filter((k) => inv[k] > 0 && cap(k, 'heatable')).sort().slice(0, 2))
       out.push({ prim: 'cook', item: it, fire: fire.id, x: fire.x, y: fire.y, key: modelKey('cook', it), consumes: [it], label: 'EAT' });
     // Shared stores at known shelters: deposit carried goods; retrieve what this creature last SAW stored.
     // Storage-aware: a store this resident last saw full is not offered for deposits.
     const home = this.nearestKnownShelter(c, (s) => !s.stock || sum(s.stock) < this.cfg.storeCapacity);
     if (home) {
-      const goods = Object.keys(inv).filter((k) => inv[k] > 0 && STORABLE.has(k)).sort((a, b) => inv[b] - inv[a] || (a < b ? -1 : 1)).slice(0, 2);
+      const goods = Object.keys(inv).filter((k) => inv[k] > 0 && STORABLE.has(k) && !(preparingMeal && (COOKING[k] || ['wood', 'flint', 'stone'].includes(k)))).sort((a, b) => inv[b] - inv[a] || (a < b ? -1 : 1)).slice(0, 2);
       for (const it of goods) out.push({ prim: 'deposit', shelter: home.id, x: home.x, y: home.y, item: it, key: modelKey('deposit', FOOD[it] ? 'food' : 'material'), consumes: Array(inv[it]).fill(it), label: 'GATHER_WOOD' });
     }
     if (!full) {
@@ -507,12 +544,18 @@ export class Expanse {
       if (s.prim === 'move' && s.purpose === 'home' && c.mind.search?.found) return 0.6;
       if (s.prim === 'carry' && s.haul) return demand.has(item) ? 0.45 : 0.1;
       if ((s.prim === 'gather' || s.prim === 'retrieve') && item && !FOOD[item] && STORABLE.has(item)) {
+        if (demand.get(item)?.startsWith('prepare:fire')) return 0.65 + c.hunger / 90;
         if (demand.has(item)) return 0.35 + (1 - c.warmth / 100);
         if (c.warmth > 70 && !(s.prim === 'gather' && FUEL[item] && this.fireDemand(c, c.lastObs))) return -0.5; // surplus: no visible use
       }
       if (s.prim === 'build' || s.prim === 'repair') { const it = (s.consumes ?? []).find((k) => demand.has(k)); if (it) return 0.4 + (1 - c.warmth / 100); }
-      if (s.prim === 'share' && FOOD[s.item]) { const o = c.lastObs?.creatures.find((q) => q.id === s.target); return o?.thin && c.hunger < 50 ? 0.4 : c.hunger > 60 ? -0.4 : 0; }
-      if (s.prim === 'cook' && c.hunger > 30) return c.hunger / 45 - 0.4; // preparing raw food at a perceived fire while hungry
+      if (s.prim === 'share' && FOOD[s.item]) { const o = c.lastObs?.creatures.find((q) => q.id === s.target); return o?.thin && c.hunger < 55 ? (s.item.startsWith('cooked_') ? 0.7 : 0.4) : c.hunger > 60 ? -0.4 : 0; }
+      if (s.prim === 'place' && s.purpose === 'prepare-fire') return 0.7 + c.hunger / 90;
+      if (s.prim === 'use' && s.on === 'pile' && s.purpose === 'prepare-fire') return 0.8 + c.hunger / 90;
+      if (s.prim === 'cook' && c.hunger > 5) return 0.5 + c.hunger / 40; // cook before hunger becomes a raw-food reflex
+      // Below the emergency threshold, a cookable meal is worth preserving while the resident is actively
+      // seeking the visible inputs for preparation. At critical hunger the normal eat reflex remains available.
+      if (s.prim === 'use' && s.on === 'self' && COOKING[s.item] && c.hunger < 75 && demand.get('wood')?.startsWith('prepare:fire')) return -1;
       if (s.prim === 'deposit' && !s.help && FOOD[s.item]) { const fs = foodStock(c, (k) => FOOD[k] !== undefined); if (c.hunger < 40 && fs.stored !== null && fs.stored < 6) return 0.3; }
     }
     if (s.prim === 'use' && s.on === 'self') return c.hunger / 30 - 1;
@@ -740,12 +783,15 @@ export class Expanse {
       const p = this.pileAt(c.x, c.y);
       if (!p) return this.endStep(c, false, 'no-pile');
       if (!this.spendEnergy(c, 1.5)) return this.endStep(c, false, 'exhausted');
-      // Ignition rule (designed physics): striking flint while also holding stone, onto a pile with fuel.
-      if (a.item !== 'flint' || !c.inventory.stone) return this.endStep(c, false, 'no-ignition');
+      // Ignition rule: striking flint on stone is reliable; an ordinary sharp stone can also make a weaker spark.
+      const flintStrike = a.item === 'flint' && c.inventory.stone;
+      const stoneStrike = a.item === 'stone' && (c.inventory.stone ?? 0) >= 1;
+      if (!flintStrike && !stoneStrike) return this.endStep(c, false, 'no-ignition');
       const fuel = Object.entries(p.items).reduce((s, [k, n]) => s + (FUEL[k] ?? 0) * n, 0);
       if (fuel <= 0) return this.endStep(c, false, 'no-fuel');
       const wet = this.weather.rain || [T.SNOW, T.SHALLOW].includes(this.tile(c.x, c.y));
-      const pIgnite = clamp((0.3 + (p.items.fiber || p.items.bundle ? 0.35 : 0)) * (wet ? 0.25 : 1) * (this.biome(c.x, c.y) === 'arid' ? 1.3 : 1), 0, 0.95);
+      const spark = flintStrike ? 0.6 : 0.35;
+      const pIgnite = clamp((spark + (p.items.fiber || p.items.bundle ? 0.35 : 0)) * (wet ? 0.25 : 1) * (this.biome(c.x, c.y) === 'arid' ? 1.3 : 1), 0, 0.95);
       if (this.rng.next() >= pIgnite) return this.endStep(c, false, 'no-spark-caught');
       for (const [k, n] of Object.entries(p.items)) if (FUEL[k]) { this.totals.burnedItems[k] = (this.totals.burnedItems[k] ?? 0) + n; delete p.items[k]; }
       this.removePileIfEmpty(p);
@@ -1152,6 +1198,13 @@ export class Expanse {
       }
     }
     if (pl) {
+      // A just-acquired cookable meal changes the resident's local options (fuel, ignition materials, an observed
+      // fire and a hungry neighbour may now matter). Do not blindly consume it as the stale second step of a plan.
+      // Critical hunger still uses the normal reflex path on the following decision.
+      if (success && c.hunger < 85 && Object.keys(produced).some((k) => COOKING[k])) {
+        this.totals.replans['food-acquired'] = (this.totals.replans['food-acquired'] ?? 0) + 1;
+        this.finishPlan(c); return;
+      }
       if (!success) { this.finishPlan(c); return; }
       pl.idx++;
       if (pl.idx < pl.raw.length) this.startStep(c); else this.finishPlan(c);

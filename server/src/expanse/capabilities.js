@@ -10,6 +10,7 @@ import { T, CLIMATE } from './terrain.js';
 // depends on COOKING). New materials participate by declaring properties here, not with bespoke behaviour.
 export const MATERIALS = {
   berry: { edible: 20, plantable: true, heatable: true, storable: true },
+  cooked_berry: { edible: 28, storable: true },
   shellfish: { edible: 26, heatable: true, storable: true },
   cactus_fruit: { edible: 10, thirst: 22, plantable: true, storable: true },
   lichen: { edible: 8, heatable: true, storable: true },
@@ -28,8 +29,8 @@ export const cap = (item, prop) => MATERIALS[item]?.[prop];
 
 // Cooking (designed): holding a heatable raw food over a lit fire for `ticks` turns it into the listed result and
 // burns `heat` fuel units from that fire. Items are conserved 1:1 (raw -> cooked); the fuel decrease is heat.
-// Raw foods without an entry (berry) only scorch: the item is kept and the fire still loses heat.
-export const COOKING = { fish: 'cooked_fish', shellfish: 'cooked_shellfish', lichen: 'cooked_lichen' };
+// Heatable foods without an entry only scorch: the item is kept and the fire still loses heat.
+export const COOKING = { berry: 'cooked_berry', fish: 'cooked_fish', shellfish: 'cooked_shellfish', lichen: 'cooked_lichen' };
 export const COOK = { ticks: 6, heat: 1.5, minFuel: 1.5, energy: 0.4 };
 
 // Crops (designed): soil tiles, temperature window (biome base temperature, deg C), water, growth and yield.

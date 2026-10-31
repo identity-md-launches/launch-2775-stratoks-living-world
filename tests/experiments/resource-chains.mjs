@@ -24,9 +24,21 @@ function census() {
 }
 const ledgerOk = () => { const h = e.holdings(), x = expectedHoldings(e.totals); const ks = new Set([...Object.keys(h), ...Object.keys(x)]); const bad = [...ks].filter((k) => (h[k] ?? 0) !== (x[k] ?? 0)); return { ok: !bad.length, bad }; };
 const T0 = structuredClone(e.totals), start = census(), series = [start], tickMs = [];
+// `chainLog` is intentionally a small in-world ring. Capture completed prepared-food evidence while the unattended
+// run is progressing so a later busy settlement cannot overwrite the only real prepare events before this report.
+const seenChains = new Set(), preparedFood = [], preparedOutcomes = {};
 const t0 = process.hrtime.bigint();
 for (let i = 0; i < ticks; i++) {
   const a = process.hrtime.bigint(); e.step(); tickMs.push(Number(process.hrtime.bigint() - a) / 1e6);
+  for (const ev of e.chainLog ?? []) {
+    const key = `${ev.kind}|${ev.tick}|${ev.resident}|${ev.item ?? ''}|${ev.outcome ?? ''}`;
+    if (seenChains.has(key)) continue;
+    seenChains.add(key);
+    if (ev.kind === 'food' && ev.cooked && ev.stages?.includes('prepare:cook')) {
+      preparedOutcomes[ev.outcome] = (preparedOutcomes[ev.outcome] ?? 0) + 1;
+      if (preparedFood.length < 8) preparedFood.push(structuredClone(ev));
+    }
+  }
   if ((i + 1) % every === 0) series.push(census());
 }
 const wall = Number(process.hrtime.bigint() - t0) / 1e6;
@@ -44,7 +56,7 @@ const report = {
   consumed: { built: delta('built'), repaired: delta('repaired'), burned: delta('burnedItems'), wornOut: delta('wornOut'), mendUsed: delta('mendUsed'), craftUsed: delta('craftUsed'), eaten: delta('eaten') },
   movement: { placed: delta('placed'), hauled: delta('hauled'), deposited: delta('deposited'), retrieved: delta('retrieved') },
   gatherDemand: e.totals.demandGathers !== undefined ? { demand: e.totals.demandGathers - (T0.demandGathers ?? 0), surplus: e.totals.surplusGathers - (T0.surplusGathers ?? 0) } : null,
-  chains, chainDurations: chains ? { materials: durations('materials'), food: durations('food'), explore: durations('explore') } : null,
+  chains, preparedFood: { completed: Object.values(preparedOutcomes).reduce((n, q) => n + q, 0), byOutcome: preparedOutcomes, examples: preparedFood }, chainDurations: chains ? { materials: durations('materials'), food: durations('food'), explore: durations('explore') } : null,
   chainExamples: chains ? ['materials', 'food', 'explore'].map((k) => log.filter((x) => x.kind === k).slice(-2)).flat() : null,
   replans: e.totals.replans ?? null, births: e.totals.births - T0.births, deaths: e.totals.deaths - T0.deaths, deathsByCause: delta('deathsByCause'),
   ledger: ledgerOk(), perf: { msPerTickMean: Math.round(wall / ticks * 100) / 100, p50: q(0.5), p95: q(0.95), max: q(1), rssMB: Math.round(process.memoryUsage().rss / 1048576), heapMB: Math.round(process.memoryUsage().heapUsed / 1048576) },
