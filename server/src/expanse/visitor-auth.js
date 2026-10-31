@@ -153,23 +153,28 @@ export class VisitorAuth {
     try { signer = recoverAddress(c.message, signature); } catch { throw fail(401, 'invalid_signature'); }
     if (signer !== c.address) throw fail(401, 'wrong_signer');
     this.gc();
-    const addressSessions = [...this.sessions.values()].filter((s) => s.address === c.address).length;
-    if (addressSessions >= this.cfg.maxSessionsPerAddress) throw fail(429, 'session_store_full');
+    // Plan admission after proof of ownership, but commit evictions only after
+    // profile persistence succeeds. Reloads may abandon memory-only credentials.
+    const admittedSessions = new Map(this.sessions);
+    const addressSessions = [...admittedSessions].filter(([, s]) => s.address === c.address);
+    if (addressSessions.length >= this.cfg.maxSessionsPerAddress) {
+      const oldest = addressSessions.sort((a, b) => a[1].expiresAt - b[1].expiresAt)[0][0];
+      admittedSessions.delete(oldest);
+    }
     // At capacity, the address holding the most sessions loses its oldest one, so no signer can monopolize the store.
     const evictFrom = (pred) => {
-      const mine = [...this.sessions].filter(([, s]) => pred(s)), counts = new Map();
+      const mine = [...admittedSessions].filter(([, s]) => pred(s)), counts = new Map();
       for (const [, s] of mine) counts.set(s.address, (counts.get(s.address) ?? 0) + 1);
       const [top, n] = [...counts].sort((a, b) => b[1] - a[1])[0] ?? [];
       if (!top || n < 2 || top === c.address) return false;
-      this.sessions.delete(mine.filter(([, s]) => s.address === top).sort((a, b) => a[1].expiresAt - b[1].expiresAt)[0][0]);
+      admittedSessions.delete(mine.filter(([, s]) => s.address === top).sort((a, b) => a[1].expiresAt - b[1].expiresAt)[0][0]);
       return true;
     };
-    if (this.sessions.size >= this.cfg.maxSessionsPerOrigin && [...this.sessions.values()].filter((s) => s.origin === origin).length >= this.cfg.maxSessionsPerOrigin && !evictFrom((s) => s.origin === origin)) throw fail(429, 'session_store_full');
-    if (this.sessions.size >= this.cfg.maxSessions && !evictFrom(() => true)) throw fail(429, 'session_store_full');
-    const previous = this.profiles.get(c.address);
+    if ([...admittedSessions.values()].filter((s) => s.origin === origin).length >= this.cfg.maxSessionsPerOrigin && !evictFrom((s) => s.origin === origin)) throw fail(429, 'session_store_full');
+    if (admittedSessions.size >= this.cfg.maxSessions && !evictFrom(() => true)) throw fail(429, 'session_store_full');
     const now = this.now();
     const next = new Map(this.profiles);
-    const activeAddresses = new Set([...this.sessions.values()].map((s) => s.address));
+    const activeAddresses = new Set([...admittedSessions.values()].map((s) => s.address));
     for (const [a, p] of next) if (!activeAddresses.has(a) && p.lastVerifiedAt + this.cfg.profileRetentionMs <= now) next.delete(a);
     if (!next.has(c.address) && next.size >= this.cfg.maxProfiles) {
       // Capacity recovery: evict the least recently verified inactive profile once it is past the minimum retention.
@@ -186,7 +191,8 @@ export class VisitorAuth {
     this.profiles = next;
     const token = crypto.randomBytes(32).toString('hex');
     const session = { address: c.address, chainId, origin, world: this.world, uri: this.uri, role: 'visitor', expiresAt: now + this.cfg.sessionTtlMs };
-    this.sessions.set(hash(token), { ...session, challengeHash: hash(nonce), cancellationHash: c.cancellationHash });
+    admittedSessions.set(hash(token), { ...session, challengeHash: hash(nonce), cancellationHash: c.cancellationHash });
+    this.sessions = admittedSessions;
     return { version: 1, token, ...session, profile: { ...profile } };
   }
   session(token, origin) {
@@ -194,7 +200,7 @@ export class VisitorAuth {
     const s = this.sessions.get(hash(token));
     if (!s || s.expiresAt <= this.now()) { this.sessions.delete(hash(token)); throw fail(401, 'session_expired_or_revoked'); }
     if (s.origin !== origin || s.world !== this.world || s.uri !== this.uri) throw fail(403, 'session_scope_mismatch');
-    const { challengeHash, ...publicSession } = s;
+    const { challengeHash, cancellationHash, ...publicSession } = s;
     return { version: 1, ...publicSession, profile: { ...this.profiles.get(s.address) } };
   }
   cancel(nonce, secret, origin) {
@@ -256,10 +262,7 @@ export async function handleVisitorAuth(req, res, auth) {
     res.setHeader('access-control-expose-headers', 'Retry-After');
     res.setHeader('vary', 'Origin');
   }
-  if (auth && auth.activeRequests >= auth.cfg.maxConcurrentRequests) {
-    res.setHeader('retry-after', '1'); json(res, 503, { version: 1, error: 'auth_busy' }); req.resume(); return true;
-  }
-  if (auth) auth.activeRequests++;
+  let counted = false;
   try {
     const method = ROUTES.get(u.pathname);
     if (!method) throw fail(404, 'not_found');
@@ -269,19 +272,26 @@ export async function handleVisitorAuth(req, res, auth) {
       else throw fail(503, 'auth_unavailable');
       return true;
     }
-    const protectedRoute = ['/api/auth/nonce', '/api/auth/verify'].includes(u.pathname);
-    auth.rate(auth.clientAddress(req), protectedRoute); // login abuse has per-peer limits; every route retains a global ceiling
     const rawOrigin = req.headers.origin, claimed = req.headers['x-stratoks-origin'];
     const origin = rawOrigin ?? claimed;
     if (rawOrigin && claimed && rawOrigin !== claimed) throw fail(403, 'origin_mismatch');
     if (origin && !auth.origins.has(origin)) throw fail(403, 'origin_not_allowed');
     if (req.method === 'OPTIONS') {
-      if (!origin) throw fail(403, 'origin_required');
+      if (!rawOrigin) throw fail(403, 'origin_required');
+      if (req.headers['transfer-encoding'] || Number(req.headers['content-length'] ?? 0) !== 0) throw fail(400, 'unexpected_body');
       const headers = (req.headers['access-control-request-headers'] ?? '').toLowerCase().split(',').map((h) => h.trim()).filter(Boolean);
       if (req.headers['access-control-request-method'] !== method || headers.some((h) => !['authorization', 'content-type', 'x-stratoks-origin'].includes(h))) throw fail(403, 'preflight_not_allowed');
       res.writeHead(204, { 'access-control-allow-methods': method, 'access-control-allow-headers': 'Authorization, Content-Type, X-Stratoks-Origin', 'cache-control': 'no-store' }); res.end(); return true;
     }
     if (req.method !== method) { res.setHeader('allow', `${method}, OPTIONS`); throw fail(405, 'method_not_allowed'); }
+    // Preflights are synchronous, bodyless and authenticate nobody. Let a valid
+    // browser reach the actual bounded request and read its Retry-After response.
+    if (auth.activeRequests >= auth.cfg.maxConcurrentRequests) {
+      res.setHeader('retry-after', '1'); throw fail(503, 'auth_busy');
+    }
+    auth.activeRequests++; counted = true;
+    const protectedRoute = ['/api/auth/nonce', '/api/auth/verify'].includes(u.pathname);
+    auth.rate(auth.clientAddress(req), protectedRoute);
     if (u.pathname === '/api/auth/config') { json(res, 200, auth.config()); return true; }
     if (!origin) throw fail(403, 'origin_required');
     const token = /^Bearer ([0-9a-f]{64})$/.exec(req.headers.authorization ?? '')?.[1];
@@ -304,7 +314,7 @@ export async function handleVisitorAuth(req, res, auth) {
     if (!res.destroyed && !res.headersSent) json(res, e.status ?? 503, { version: 1, error: e.code ?? 'auth_unavailable' });
     req.resume();
   } finally {
-    if (auth) auth.activeRequests--;
+    if (counted) auth.activeRequests--;
   }
   return true;
 }

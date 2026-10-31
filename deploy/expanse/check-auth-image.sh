@@ -3,7 +3,13 @@
 set -eu
 image=stratoks-expanse-auth-check
 platform=${1:-linux/arm64}
-docker buildx build --platform "$platform" --load -f deploy/expanse/Dockerfile -t "$image" .
+if docker buildx version >/dev/null 2>&1; then
+  docker buildx build --platform "$platform" --load -f deploy/expanse/Dockerfile -t "$image" .
+else
+  native=$(docker version --format '{{.Server.Os}}/{{.Server.Arch}}')
+  [ "$native" = "$platform" ] || { echo "Need buildx/emulation for $platform on $native" >&2; exit 1; }
+  docker build -f deploy/expanse/Dockerfile -t "$image" .
+fi
 container=$(docker run -d --platform "$platform" --read-only --tmpfs /data:uid=1000,gid=1000,mode=0700 --tmpfs /tmp \
   -e AUTH_URI=http://localhost:8790/ -e AUTH_LOCAL_DEMO=true -e INITIAL_SEED_COUNT=3 -e TICK_MS=1000 "$image")
 trap 'docker rm -f "$container" >/dev/null' EXIT INT TERM
