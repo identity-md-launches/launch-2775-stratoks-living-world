@@ -4,7 +4,8 @@ export function constructionStage(site: NonNullable<WorldFrame['view']['sites']>
   if (!Object.values(site.materials).some(n=>n>0)) return 'marker';
   return site.stage>=1 ? 'frame' : 'foundation';
 }
-export type Pose = 'idle' | 'walk' | 'rest' | 'sleep' | 'gather' | 'carry' | 'build' | 'fish' | 'plant' | 'tend' | 'harvest' | 'cook';
+export type Pose = 'idle' | 'walk' | 'rest' | 'sleep' | 'gather' | 'chop' | 'pickup' | 'work' | 'carry' | 'hold' | 'build' | 'fish' | 'plant' | 'tend' | 'harvest' | 'cook';
+const WOOD_NODES = new Set(['tree', 'deadfall', 'driftwood', 'scrub']);
 export function carried(r: Resident, f: WorldFrame) {
   return r.carrying ?? (f.inspector?.id === r.id ? f.inspector.inventory : {});
 }
@@ -24,9 +25,18 @@ export function residentPose(r: Resident, f: WorldFrame, moving: boolean): Pose 
   if(r.state==='cook'&&r.phase==='cook'&&r.item&&cap(r.item,'heatable')&&(load[r.item]??0)>0&&f.view.fireState?.some(q=>near(q)&&q.x===r.target?.x&&q.y===r.target?.y&&q.fuel>=1.5))return 'cook';
   const workTool=r.tools?.some(t=>t==='hand_axe'||t==='stone_club');
   if (workTool && ((r.state === 'construct' && r.phase === 'construct' && (f.view.sites ?? []).some(s=>s.x===r.target?.x && s.y===r.target?.y && Object.values(s.materials).some(n=>n>0))) || (r.state === 'repair' && r.phase === 'repair' && Object.keys(load).some(k=>cap(k,'building')&&(load[k]??0)>0)))) return 'build';
-  // Gathering art contains berries: don't show a harvested berry before one exists.
-  if (r.state === 'gather' && (load.berry ?? 0)>0) return 'gather';
-  if ((load.wood ?? 0)>0 || (load.berry ?? 0)>0) return 'carry';
+  // Gathering is depicted from the ACTUAL target node and item, never from what
+  // happens to be in hand: berry art requires a live bush in reach.
+  if (r.state === 'gather' && r.phase === 'gather' && r.target) {
+    const node=(f.view.nodes ?? []).find(([,,x,y])=>x===r.target!.x&&y===r.target!.y&&near({x,y}));
+    if (node && node[4]>0) {
+      if (r.item==='berry' && node[1]==='bush') return 'gather';
+      if ((r.item==='wood'||r.item==='stick') && WOOD_NODES.has(node[1])) return workTool ? 'chop' : 'pickup';
+      return 'work';
+    }
+  }
+  // Stationary residents keep the held load visible without a walking/carry cycle.
+  if ((load.wood ?? 0)>0 || (load.berry ?? 0)>0) return 'hold';
   return 'idle';
 }
 export function residentSprite(r: Resident, f: WorldFrame, moving: boolean, direction: string, phase: number): string {
@@ -38,8 +48,11 @@ export function residentSprite(r: Resident, f: WorldFrame, moving: boolean, dire
   if(pose==='rest') return 'rest.settle';
   if(pose==='build') return phase%2 ? 'build.raise.0' : 'build.strike.0';
   if(pose==='gather') return ['gather.reach','gather.crouch','gather.lift'][phase%3];
-  if(pose==='carry') {
-    if ((load.wood ?? 0)>0) return `carry.wood.${phase%2}`;
+  // Wood work: a held work tool swings; bare hands lift a piece from the stock.
+  if(pose==='chop') return phase%2 ? 'build.raise.1' : 'build.strike.1';
+  if(pose==='pickup') return phase%2 ? 'build.ready' : 'build.lower';
+  if(pose==='carry'||pose==='hold') {
+    if ((load.wood ?? 0)>0) return `carry.wood.${pose==='carry'?phase%2:0}`;
     if ((load.berry ?? 0)>0) return 'carry.berries';
     // No fabricated material substitute. The generic pouch is drawn separately.
   }

@@ -87,3 +87,94 @@
 .exp-app .exp-minimap-hit {transition:none;border-radius:0;}
 .exp-app .exp-minimap-hit:active:not(:disabled) {transform:none;scale:1;}
 .exp-minimap {border-radius:0;}
+/* World-first context chip (replaces the former welcome card). One row, at most
+   44px tall, so the scene stays visible; the main action stays on screen. */
+.exp-context {
+  position: absolute;
+  top: 16px;
+  left: 28px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 120px);
+  min-height: 44px;
+  padding: 2px 2px 2px 12px;
+  color: var(--hud-text);
+  background: color-mix(in srgb, var(--hud) 94%, transparent);
+  border: 1px solid var(--hud-line);
+  border-radius: 10px;
+  box-shadow: 0 4px 14px #1d2b2533;
+}
+.exp-context h1 {
+  font: 600 14px/1.2 var(--font, inherit);
+  letter-spacing: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+}
+.exp-context-climate {
+  font-size: 12px;
+  color: var(--hud-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.exp-context-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--hud-text);
+  background: var(--hud-raised);
+  white-space: nowrap;
+}
+.exp-context-action.primary { background: var(--gold); color: #1d2b25; }
+.exp-context-action:hover { background: var(--hud-hover); }
+.exp-context-action.primary:hover { background: var(--gold-hover); }
+.exp-context-action:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.exp-app .exp-tool-rail { top: 76px; }
+/* Diagnostics: tick, source and cadence are disclosed on request only. */
+.exp-diagnostics { position: relative; }
+.exp-diagnostics summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--hud-muted);
+}
+.exp-diagnostics summary::-webkit-details-marker { display: none; }
+.exp-diagnostics summary:hover { color: var(--hud-text); }
+.exp-diagnostics summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+.exp-diagnostics dl {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 4px 14px;
+  padding: 10px 12px;
+  min-width: 240px;
+  color: var(--hud-text);
+  background: var(--hud-deep);
+  border: 1px solid var(--hud-line);
+  border-radius: 8px;
+  box-shadow: 0 8px 20px #0006;
+}
+.exp-diagnostics dt { color: var(--hud-muted); }
+.exp-diagnostics dd { margin: 0; font-variant-numeric: tabular-nums; }
+@media (max-width: 700px) {
+  .exp-context { top: 12px; left: 16px; right: 16px; max-width: none; padding-left: 10px; }
+  .exp-context h1 { flex: 1 1 auto; min-width: 0; }
+  .exp-app .exp-tool-rail { top: 68px; }
+}
+@media (max-width: 420px) {
+  .exp-context-climate { display: none; }
+}

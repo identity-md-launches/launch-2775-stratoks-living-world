@@ -1,4 +1,6 @@
 import { drawSprite, type Art } from "./art";
+import { drawVariant, type Region } from "./variants";
+const REGIONS = new Set(["forest", "desert", "cold", "coast"]);
 import { residentPose, residentSprite, carried, constructionStage } from "./appearance";
 export { residentPose } from "./appearance";
 import { scale, type Size, type Point } from "./projection";
@@ -231,21 +233,27 @@ export class WorldRenderer {
             opts.motion && kind === "tree"
               ? Math.sin(now / 2400 + hash(x, y)) * s * 0.012
               : 0;
-          drawSprite(ctx, this.art, sprite, p.x + sway, p.y, width * s);
+          // Trees vary by stable node ID (silhouette, mirror, size); others use the atlas.
+          if (kind === "tree" && REGIONS.has(prefix)) drawVariant(ctx, this.art, "tree", prefix as Region, node, sprite, p.x + sway, p.y, width * s);
+          else drawSprite(ctx, this.art, sprite, p.x + sway, p.y, width * s);
         },
       });
     }
     const prefixAt = (x:number,y:number) => { const b=biomeAt(f,x,y);return b==='temperate'?'forest':b==='arid'?'desert':b; };
-    const structure = (x:number,y:number,stage:string,integrity=100) => {
+    const structure = (x:number,y:number,stage:string,integrity=100,id?:number) => {
       const p=project({x:x+.5,y:y+.5},c,size);
       if(!visible(p,s*5)){culled++;return;}
       drawn++;
       objects.push({depth:p.depth,draw:()=>{
-        drawSprite(ctx,this.art,`${prefixAt(x,y)}.shelter.${stage}`,p.x,p.y,s*4.6,integrity<=0?.35:1);
+        const region=prefixAt(x,y),name=`${region}.shelter.${stage}`;
+        // Completed shelters vary architecture by stable shelter ID; construction
+        // stages, condition and the authoritative tile are unchanged.
+        if(id!==undefined&&stage==='complete'&&REGIONS.has(region))drawVariant(ctx,this.art,'shelter',region as Region,id,name,p.x,p.y,s*4.6,integrity<=0?.35:1);
+        else drawSprite(ctx,this.art,name,p.x,p.y,s*4.6,integrity<=0?.35:1);
         if(integrity<40){ctx.strokeStyle='#c49d63';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(p.x-s*.6,p.y-s);ctx.lineTo(p.x-s*.3,p.y-s*.6);ctx.lineTo(p.x-s*.4,p.y);ctx.stroke();}
       }});
     };
-    for (const [,x,y,,integrity] of v.shelters) structure(x,y,'complete',integrity);
+    for (const [id,x,y,,integrity] of v.shelters) structure(x,y,'complete',integrity,id);
     for (const ruin of v.ruins ?? []) structure(ruin.x,ruin.y,'foundation',0);
     for (const site of v.sites ?? []) {
       const p=project({x:site.x+.5,y:site.y+.5},c,size);
@@ -358,7 +366,15 @@ export class WorldRenderer {
           }
           ctx.restore();
           const load=carried(r,f);
-          if(Object.values(load).some(n=>n>0)&&!sprite.startsWith('carry.')&&!sprite.startsWith('gather.')){
+          if(pose==='work'&&r.target){
+            // Bare-hand work at the actual node (stone, flint, reeds…): a reach
+            // toward the target, paced by the frame clock, with no invented prop.
+            const q=project({x:r.target.x+.5,y:r.target.y+.5},c,size),reach=opts.motion?.55+.25*Math.sin(now/180):.7;
+            ctx.strokeStyle='#e9b93c';ctx.lineWidth=Math.max(1.5,s*.12);ctx.lineCap='round';
+            ctx.beginPath();ctx.moveTo(p.x,p.y-s*.55);ctx.lineTo(p.x+(q.x-p.x)*reach*.5,p.y-s*.55+(q.y-p.y)*reach*.5+s*.15);ctx.stroke();ctx.lineCap='butt';
+          }
+          // The held inventory stays visible separately from the depicted action.
+          if(Object.values(load).some(n=>n>0)&&!sprite.startsWith('carry.')){
             // Small neutral pouch for loads without a matching supplied pose; no false wood/fish.
             ctx.fillStyle='#9b7750';ctx.beginPath();ctx.ellipse(p.x+s*.38,p.y-s*.48,s*.14,s*.19,-.3,0,Math.PI*2);ctx.fill();
           }

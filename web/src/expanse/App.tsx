@@ -361,16 +361,21 @@ export default function ExpanseApp() {
           <Icon name="people" size={15} />
           <b>{display.summary.population}</b> residents
         </span>
-        <span>
-          <Icon name="clock" size={15} />
-          Tick <b>{display.tick.toLocaleString()}</b>
-        </span>
         <span className="exp-status-scope">
           {recorded ? "Recorded world totals" : "World totals"}
-          {source.kind === "server" && lastRead && !recorded
-            ? " · polling every second"
-            : ""}
         </span>
+        <details className="exp-diagnostics">
+          <summary>
+            <Icon name="clock" size={15} />
+            <span>Diagnostics</span>
+          </summary>
+          <dl>
+            <dt>Tick</dt><dd>{display.tick.toLocaleString()}</dd>
+            <dt>Source</dt><dd>{recorded ? "Recording" : source.kind === "demo" ? `Isolated demo · seed ${source.seed}` : "Live server"}</dd>
+            <dt>Updates</dt><dd>{source.kind === "server" && !recorded ? (lastRead ? "Polling every second" : "Waiting for first frame") : paused ? "Paused" : "Local worker"}</dd>
+            <dt>View</dt><dd>{display.view.x0}, {display.view.y0} · {display.view.w}×{display.view.h} tiles</dd>
+          </dl>
+        </details>
         {source.kind === "demo" && (
           <button
             className="exp-text-button"
@@ -398,35 +403,30 @@ export default function ExpanseApp() {
             motion={visualMotion && !reduced}
             recorded={recorded}
           />
-          <div className="exp-scene-heading">
-            <div className="exp-scene-title">
-              <span className="exp-leaf-mark" aria-hidden="true">
-                <Icon name="leaf" size={20} />
-              </span>
-              <h1>A world taking root</h1>
-            </div>
-            <p>{BIOME_NAMES[display.view.biome] ?? "The Expanse"}{display.view.climate ? ` · ${display.view.climate.temperature} °C${display.view.climate.rain ? " · Rain" : ""}` : " · Recorded terrain"}</p>
-            <div className="exp-scene-actions">
-              {recorded && (
-                <button
-                  className="exp-button primary"
-                  onClick={demo}
-                  disabled={source.kind === "demo" && status === "connecting"}
-                >
-                  <Icon name="play" size={16} />
-                  {source.kind === "demo" && status === "connecting"
-                    ? "Opening demo…"
-                    : "Explore demo"}
-                </button>
-              )}
+          {/* Compact contextual control: place + climate + the main action. */}
+          <div className="exp-context">
+            <span className="exp-leaf-mark" aria-hidden="true">
+              <Icon name="leaf" size={16} />
+            </span>
+            <h1>{BIOME_NAMES[display.view.biome] ?? "The Expanse"}</h1>
+            <span className="exp-context-climate">{display.view.climate ? `${display.view.climate.temperature} °C${display.view.climate.rain ? " · Rain" : ""}` : "Recorded terrain"}</span>
+            {recorded && (
               <button
-                className={`exp-button ${!recorded ? "primary" : ""}`}
-                onClick={() => toggle("residents")}
+                className="exp-context-action"
+                onClick={demo}
+                disabled={source.kind === "demo" && status === "connecting"}
               >
-                <Icon name="search" size={16} />
-                Find residents
+                <Icon name="play" size={15} />
+                {source.kind === "demo" && status === "connecting" ? "Opening…" : "Explore demo"}
               </button>
-            </div>
+            )}
+            <button
+              className={`exp-context-action ${!recorded ? "primary" : ""}`}
+              onClick={() => toggle("residents")}
+            >
+              <Icon name="search" size={15} />
+              Find residents
+            </button>
           </div>
           <nav className="exp-tool-rail" aria-label="World tools">
             <button

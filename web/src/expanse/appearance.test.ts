@@ -60,3 +60,18 @@ test('new activity art needs actual work, local object, input and heat/water',()
  assert.equal(residentPose({...cook,x:60},ff,false),'idle');
  assert.equal(residentSprite({...here,state:'tend',phase:'tend'},ff,false,'se',0),'agency.kneel');
 });
+test('finding f08d8a7: a held berry never turns wood work into berry picking',()=>{
+ const tree:[string,string,number,number,number]=['n1','tree',9,60,8], bush:[string,string,number,number,number]=['n2','bush',9,60,3];
+ const ff=(node:[string,string,number,number,number])=>({...f,view:{...f.view,nodes:[node]}}) as unknown as WorldFrame;
+ const wood={...r,x:10,y:60,state:'gather',phase:'gather',item:'wood',target:{x:9,y:60},carrying:{wood:3,stick:1,berry:1},tools:[] as string[]};
+ assert.equal(residentPose(wood,ff(tree),false),'pickup');
+ for(let n=0;n<6;n++)assert.ok(!residentSprite(wood,ff(tree),false,'se',n).startsWith('gather.'));
+ assert.equal(residentPose({...wood,tools:['hand_axe']},ff(tree),false),'chop');
+ assert.equal(residentPose({...wood,item:'berry'},ff(bush),false),'gather','confirmed berry gathering at a live bush');
+ assert.equal(residentPose({...wood,item:'berry'},ff(tree),false),'work','berry item without a bush is not berry art');
+ assert.equal(residentPose({...wood,item:'berry'},ff(['n2','bush',9,60,0]),false),'hold','depleted bush: no picking');
+ assert.equal(residentPose({...wood,target:{x:4,y:60}},ff(['n1','tree',4,60,8]),false),'hold','out of reach: no work gesture');
+ assert.equal(residentPose({...wood,item:'stone'},ff(['n3','stone',9,60,4]),false),'work');
+ assert.equal(residentSprite({...wood,phase:'store',state:'store'},ff(tree),false,'se',3),'carry.wood.0','stationary hold does not cycle');
+ assert.equal(residentPose(wood,ff(tree),true),'carry','only motion plays the carry cycle');
+});
